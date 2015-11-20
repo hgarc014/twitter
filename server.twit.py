@@ -59,14 +59,14 @@ offlinePre='offline='
 postPre='post='
 searchPre='search='
 
-def login_check(data):
+def login_user(data):
 	
         global loginPre
 	wasValid=False
 	#if data[:2] == '0=':
 	username=data[len(loginPre):data.find(':')]
 	passwd=data[data.find(':')+1:]
-	print 'user:\"' + username + '\" pass:\"'+passwd+'\"'
+	#print 'user:\"' + username + '\" pass:\"'+passwd+'\"'
 	mesgs=''
 	for user in userlist:
 		if user.userName == username and user.passwd == passwd:
@@ -90,11 +90,11 @@ def login_check(data):
 
 #allow admin to type messagecount in order to display number of received messages since server was activated
 
-def mylogout(data):
+def logout_user(data):
         global logoutPre
 	username=data[len(logoutPre) : data.find(':')]
 	passwd=data[data.find(':')+1:]
-	print 'user:\"' + username + '\" pass:\"'+passwd+'\"'
+	#print 'user:\"' + username + '\" pass:\"'+passwd+'\"'
 	wasValid=False
 	for user in userlist:
 		if user.userName == username and user.passwd == passwd:
@@ -115,9 +115,9 @@ while 1:
 	addr = d[1]
 	
 	if data.find(loginPre) != -1:
-		login_check(data)
+		login_user(data)
 	elif data.find(logoutPre) != -1:
-		mylogout(data)
+		logout_user(data)
 
 s.close()
 

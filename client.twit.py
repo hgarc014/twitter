@@ -67,7 +67,7 @@ def hashtag_search():
 	print pleaseWait
 	return
 
-def logout():
+def logout_user():
 	global user
 	global passwd
 	global logoutPre
@@ -80,12 +80,12 @@ def logout():
 		print 'You have been logged out!'
 	else:
 		print 'WARNING: error occured'
-		return logout()
+		return logout_user()
 	#TODO: tell server you logged out
 	login_user();
 	return
 
-def menu():
+def menu_disp():
 	print '1: See Offline Message'
 	print '2: Edit Subscriptions'
 	print '3: Post a Message'
@@ -102,11 +102,11 @@ def menu():
 	elif choice == '4':
 		hashtag_search();
 	elif choice == '5':
-		logout();
+		logout_user();
 	else:
 		print '\nInvalid Response! Try again!\n'
-		menu()
-	menu()
+		menu_disp()
+	menu_disp()
 
 
 def login_user():
@@ -135,7 +135,7 @@ def login_user():
 	if reply[:len(loginPre)+1] == '1'+loginPre:
 		msgs=reply[len(loginPre)+1:]
 		print 'Welcome ' + user + ' You have '+msgs+' unread messages.'
-		menu();
+		menu_disp();
 	else:
 		print 'Login Failed! Please Re-try!'
 		login_user()
