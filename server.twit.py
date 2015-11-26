@@ -51,6 +51,7 @@ except socket.error, msg:
 print 'Socket bind complete'
 
 userlist=[]
+allPosts=[]
 test=User('user','pass')
 test.subscriptions.append('u')
 userlist.append(test);
@@ -164,6 +165,7 @@ def post_message(data):
 	username=array[0]
 	message=array[1]
 	hashtags=array[2]	
+	allPosts.append(Message(message,hashtags,username))
 	for user in userlist:
 		if username in user.subscriptions:
 			#post realtime message
@@ -233,6 +235,17 @@ def offline_user(data):
 	test='|'.join(res)
 	s.sendto('1'+offlineUserPre+test,addr)
 
+def search_hashtag(data):
+	global searchPre
+	searchtag=data[len(searchPre):]
+	msgs=[]
+	for message in allPosts:
+		if len(msgs) == 10:
+			break
+		if message.hashtags.lower() == searchtag.lower():
+			msgs.append(message.message)
+	test = '|'.join(msgs)
+	s.sendto('1'+searchPre+test,addr)
 
 while 1:
 	d = s.recvfrom(1024)
@@ -251,14 +264,12 @@ while 1:
 		user_add_subscription(data)
 	elif data.find(offlinePre) != -1:
 		offline_all(data)
-		#user_add_subscription(data)
 	elif data.find(offlineUserPre) != -1:
 		offline_user(data)
 	elif data.find(postPre) != -1:
 		post_message(data)
-		#pass
-		#user_add_subscription(data)
 	elif data.find(searchPre) != -1:
+		search_hashtag(data)
 		pass
 		#user_add_subscription(data)
 

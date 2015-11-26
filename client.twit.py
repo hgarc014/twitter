@@ -234,7 +234,30 @@ def post_message():
 #hashtag search
 #user will see 10 tweets containing hashtag
 def hashtag_search():
-	print pleaseWait
+	global searchPre
+	#print pleaseWait
+	print_header('Search Hashtag')
+	choice=raw_input("Search Hashtag:")
+	if ' ' in choice:
+		print 'You shouldn\' have spaces to search a hastag. Try again'
+		return hashtag_search()
+	elif '#' in choice:
+		print 'You passed in a \'#\', so we removed it'
+		choice = choice.replace('#','')
+	s.sendto(searchPre+choice,(host,port))
+	d = s.recvfrom(1024)
+	reply = d[0]
+	addr = d[1]
+	if reply[:len(searchPre)+1]=='1'+searchPre:
+		msgs = reply[len(searchPre)+1:]
+		arr = msgs.split('|')
+		i=1
+		for message in arr:
+			print str(i) + ':' + message
+			i+=1
+			
+	else:
+		print 'something bad happened'
 	return
 
 def logout_user():
