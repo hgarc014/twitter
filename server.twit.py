@@ -7,9 +7,11 @@ from thread import *
 
 class Message(object):
 	
-	def __init__(self, message, isRead):
+	def __init__(self, message,hashtags,username):
 		self.message=message
-		self.isRead=isRead
+		self.hashtags=hashtags
+		self.username=username
+		self.isRead=False
 
 class User(object):
 	
@@ -17,6 +19,7 @@ class User(object):
 	def __init__(self, userName, passwd):
 		self.userName=userName
 		self.passwd=passwd
+		self.unreadmsg=[]
 		self.messages=[]
 		self.subscriptions=[]
 		self.isLogin=False
@@ -60,6 +63,7 @@ subscriptionsPre='subscriptions='
 subscribePre='subscribe='
 subscribeDropPre='subscribeDrop='
 offlinePre='offline='
+offlineUserPre='offlineUser='
 postPre='post='
 searchPre='search='
 
@@ -86,7 +90,7 @@ def login_user(data):
 #	for user in userlist:
 #		if user.userName == username and user.passwd == passwd:
 		print 'Logged in user: ' + user.userName
-		mesgs=len(user.messages)
+		mesgs=len(user.unreadmsg)
 		user.isLogin=True
 		wasValid=True;
 		
@@ -101,7 +105,7 @@ def login_user(data):
 def user_subscriptions(data):
 	global subscriptionsPre
 	username=data[len(subscriptionsPre):]
-	check_input("user_sub",'data',data)
+	#check_input("user_sub",'data',data)
 	check_input("user_sub","username",username)
 	user = get_user(username)
 	if user:
@@ -120,7 +124,7 @@ def user_drop_subscription(data):
 	text=data[len(subscribeDropPre):]
 	username=text[:text.find(':')]
 	subrm=text[text.find(':')+1:]
-	check_input("drop_sub",'data',data)
+	#check_input("drop_sub",'data',data)
 	check_input("drop_sub","username",username)
 	check_input("drop_sub","sub",subrm)
 	user = get_user(username)
@@ -142,11 +146,35 @@ def user_add_subscription(data):
 	user = get_user(username)
 	adduser=get_user(subadd)
 	if adduser:
-		if subadd not in user.subscriptions:
+		if subadd not in user.subscriptions and subadd != user.userName:
 			user.subscriptions.append(subadd);
 		s.sendto('1'+subscribePre,addr);
 	else:
 		s.sendto('0'+subscribePre,addr);
+	
+#list = Class(stuff) + list
+	
+def post_message(data):
+	global postPre
+	data = data[len(postPre):]
+	array = data.split('|')
+	if len(array) != 3:
+		print 'not 3' + array
+		s.sendto('0'+postPre,addr)
+	username=array[0]
+	message=array[1]
+	hashtags=array[2]	
+	for user in userlist:
+		if username in user.subscriptions:
+			#post realtime message
+			if not user.isLogin:
+				print '\nadding message offline message for ' + user.userName
+				print 'Message: ' + message
+				print 'Hashtags: ' + hashtags
+				print 'username: ' + username
+				user.unreadmsg.append(Message(message,hashtags,username))
+	s.sendto('1'+postPre,addr)
+		
 	
 	
 #receive messages and redistribute to appropiate subscribers in real time
@@ -167,6 +195,7 @@ def logout_user(data):
 #		if user.userName == username and user.passwd == passwd:
 		print 'logged out user: ' + user.userName;
 		user.isLogin=False
+		user.unreadmsg=[]
 		wasValid=True
 		
 	if wasValid:
@@ -174,6 +203,35 @@ def logout_user(data):
 	else:
 		s.sendto('0'+logoutPre,addr);
 	return
+
+def offline_all(data):
+	global offlinePre
+	username=data[len(offlinePre):]
+	user = get_user(username)
+	res=[]
+	for msg in user.unreadmsg:
+		res.append(msg.message)
+	test = '|'.join(res)
+	s.sendto('1'+offlinePre+test,addr)
+	return
+	
+
+
+def offline_user(data):
+	global offlineUserPre
+	username=data[len(offlineUserPre):data.find(':')]
+	sub_user=data[data.find(':')+1:]
+	user = get_user(username)
+	res=[]
+	#print 'messages: ' + str(len(user.unreadmsg))
+	for msg in user.unreadmsg:
+		#print 'msgUser: ' + msg.username
+		#print 'subUser: ' + sub_user
+		if msg.username == sub_user:
+			#print 'Matched: ' + msg.message
+			res.append(msg.message)
+	test='|'.join(res)
+	s.sendto('1'+offlineUserPre+test,addr)
 
 
 while 1:
@@ -192,10 +250,13 @@ while 1:
 	elif data.find(subscribePre) != -1:
 		user_add_subscription(data)
 	elif data.find(offlinePre) != -1:
-		pass
+		offline_all(data)
 		#user_add_subscription(data)
+	elif data.find(offlineUserPre) != -1:
+		offline_user(data)
 	elif data.find(postPre) != -1:
-		pass
+		post_message(data)
+		#pass
 		#user_add_subscription(data)
 	elif data.find(searchPre) != -1:
 		pass

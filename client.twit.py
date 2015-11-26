@@ -32,6 +32,7 @@ subscribePre='subscribe='
 subscriptionsPre='subscriptions='
 subscribeDropPre='subscribeDrop='
 offlinePre='offline='
+offlineUserPre='offlineUser='
 postPre='post='
 searchPre='search='
 
@@ -47,6 +48,61 @@ def print_header(menu):
 #while user logged in make sure to display real time message sent by any subscriptions
 #-----------------
 
+def get_offline_messages():
+	global offlinePre
+	s.sendto(offlinePre+user,(host,port))
+	d=s.recvfrom(1024)
+	reply = d[0]
+	addr = d[1]
+	if reply [:len(offlinePre)+1] == '1' + offlinePre:
+		msgs= reply[len(offlinePre)+1:]
+		print_header("Messages")
+		arr = msgs.split('|')
+		i=1
+		for message in arr:
+			print str(i) + ':' + message
+			i +=1
+	return
+
+
+def get_offline_by_user():
+	global offlineUserPre
+	s.sendto(subscriptionsPre+user,(host,port));
+	d = s.recvfrom(1024)
+	reply = d[0]
+	addr = d[1]
+	if reply[:len(subscriptionsPre)+1] == '1'+subscriptionsPre:
+		subs = reply[len(subscriptionsPre)+1:]
+		subscriptions=subs.split(':')
+		i = print_subscriptions(subs,'Show offline messages from user')
+		if not i or i == 0:
+			return
+		choice=raw_input("Choice:")
+		try:
+			choice = int(choice)
+		except ValueError:
+			donothing=''
+		if type(choice) ==int and choice >= 1 and choice <= i:
+			if choice == i:
+				return	
+			#print 'sending:'+offlineUserPre+user+':'+subscriptions[choice-1]
+			s.sendto(offlineUserPre+user+':'+subscriptions[choice-1],(host,port))
+			d = s.recvfrom(1024)
+			reply = d[0]
+			addr = d[1]
+			if reply [:len(offlineUserPre)+1] == '1' + offlineUserPre:
+				msgs = reply[len(offlineUserPre)+1:]
+				print_header("Messages from " + subscriptions[choice-1])
+				arr=msgs.split('|')
+				i=1
+				for message in arr:
+					print str(i) + ':' + message
+					i+=1
+			else:
+				print 'something bad happened'
+		else:
+			print 'Invalid choice. Please Try again'
+			get_offline_by_user()
 
 
 #offline messages
@@ -54,9 +110,35 @@ def print_header(menu):
 #has option to display all or only from a subscription
 #when user logs out these messages should be removed
 def offline_message():
-	print pleaseWait
+	global offlinePre
+	print_header('Offline Messages')
+	print '1: see all offline messages'
+	print '2: see offline messages from user'
+	choice = raw_input('choice:')
+	if choice == '1':
+		get_offline_messages()
+	elif choice == '2':
+		get_offline_by_user()
+	else:
+		print 'invalid choice. try again'
+		offline_message()
+	#print pleaseWait
 	return
 
+def print_subscriptions(subs,header):
+	print_header(header)
+	subscriptions=subs.split(':')
+	if len(subs) == 0:
+		print 'You have no subscriptions'
+		return
+	else:
+		i=0
+		for sub in subscriptions:
+			i+=1
+			print str(i) + ':' + sub
+		i+=1
+		print str(i) + ':cancel'
+		return i;
 
 #edit subscriptions
 #allow user to add or drop a subscription (user)
@@ -65,19 +147,10 @@ def offline_message():
 
 def drop_subscription(subs):
 	
-	print_header('Drop subscription')
+#	print_header('Drop subscription')
 	subscriptions=subs.split(':')
-	
-	if len(subs) == 0:
-		print 'You have no subscriptions'
-	else:
-		i=0
-		for sub in subscriptions:
-			i += 1
-			print str(i) + ':' +sub
-			
-		i += 1
-		print str(i) + ':cancel'
+	i = print_subscriptions(subs,'Drop subscription')
+	if i and i !=0:
 		choice=raw_input("Choice:")
 		try:
 			choice = int(choice)
@@ -139,7 +212,23 @@ def edit_subscriptions():
 #ask for hashtags afterwards
 #if larger than 140 notify user and tell them to re-enter (or cancel)
 def post_message():
-	print pleaseWait
+	#print pleaseWait
+	global postPre
+	message=raw_input("Message (no hashtags):")
+	hashtags=raw_input("HashTags:")
+	if len(message)+len(hashtags) > 140:
+		print 'Your message was too long, try again!'
+		return post_message()
+	if message.find('|') != -1 or hashtags.find('|') != -1:
+		print 'you cannot use the \'|\' character, try again'	
+		return post_message()
+	s.sendto(postPre +user+'|' + message + '|'+hashtags,(host,port))
+	d = s.recvfrom(1024)
+	reply = d[0]
+	if reply [:len(postPre)+1] == '1' + postPre:
+		print 'message sent successfully'
+	else:
+		print 'failed to post ' + reply
 	return
 
 #hashtag search
