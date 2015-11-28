@@ -5,6 +5,7 @@ import socket
 import sys
 import time
 import os
+import json
 #from check import ip_checksum
 
 try:
@@ -23,7 +24,6 @@ port = 6481
 pleaseWait='\nPlease do not use this function it is under construction, thanks!\n'
 user=''
 passwd=''
-msgs=''
 
 
 loginPre='login='
@@ -35,14 +35,36 @@ offlinePre='offline='
 offlineUserPre='offlineUser='
 postPre='post='
 searchPre='search='
+userMsgPre='msgcnt='
+
+strline='\n-----------------------------------------------'
+
+def return_json(obj):
+	return json.dumps(obj, default=lambda o: o.__dict__)
 
 def clear_screen():
-	time.sleep(.5)
+	#time.sleep(.5)
 	unused_var=os.system('clear')
 	
 def print_header(menu):
 	#clear_screen()
 	print '\n====== ' + menu + ' ======\n'
+
+def print_tweets(tweets):
+	print strline
+	for message in tweets:
+		#print message
+		print_tweet(message)
+	print strline
+
+def print_tweet(message):
+	#print '\n-----------------------------------------------'
+	print '\n@' +message['username']
+	if len(message['hashtags']) > 0:
+		print '#' + '#'.join(message['hashtags'])
+	if len(message['message']) > 0:
+		print message['message']
+	#print '\n-----------------------------------------------'
 
 #------------------
 #while user logged in make sure to display real time message sent by any subscriptions
@@ -57,11 +79,8 @@ def get_offline_messages():
 	if reply [:len(offlinePre)+1] == '1' + offlinePre:
 		msgs= reply[len(offlinePre)+1:]
 		print_header("Messages")
-		arr = msgs.split('|')
-		i=1
-		for message in arr:
-			print str(i) + ':' + message
-			i +=1
+		myj=json.loads(msgs)
+		print_tweets(myj)
 	return
 
 
@@ -73,7 +92,7 @@ def get_offline_by_user():
 	addr = d[1]
 	if reply[:len(subscriptionsPre)+1] == '1'+subscriptionsPre:
 		subs = reply[len(subscriptionsPre)+1:]
-		subscriptions=subs.split(':')
+		subscriptions = json.loads(subs)
 		i = print_subscriptions(subs,'Show offline messages from user')
 		if not i or i == 0:
 			return
@@ -93,11 +112,8 @@ def get_offline_by_user():
 			if reply [:len(offlineUserPre)+1] == '1' + offlineUserPre:
 				msgs = reply[len(offlineUserPre)+1:]
 				print_header("Messages from " + subscriptions[choice-1])
-				arr=msgs.split('|')
-				i=1
-				for message in arr:
-					print str(i) + ':' + message
-					i+=1
+				myj = json.loads(msgs)
+				print_tweets(myj)
 			else:
 				print 'something bad happened'
 		else:
@@ -127,8 +143,9 @@ def offline_message():
 
 def print_subscriptions(subs,header):
 	print_header(header)
-	subscriptions=subs.split(':')
-	if len(subs) == 0:
+	#subscriptions=subs.split(':')
+	subscriptions = json.loads(subs)
+	if len(subscriptions) == 0:
 		print 'You have no subscriptions'
 		return
 	else:
@@ -148,7 +165,7 @@ def print_subscriptions(subs,header):
 def drop_subscription(subs):
 	
 #	print_header('Drop subscription')
-	subscriptions=subs.split(':')
+	subscriptions = json.loads(subs)
 	i = print_subscriptions(subs,'Drop subscription')
 	if i and i !=0:
 		choice=raw_input("Choice:")
@@ -173,7 +190,8 @@ def drop_subscription(subs):
 			
 def add_subscription():
 	sub = raw_input("User to subscribe:")
-	s.sendto(subscribePre+user+':'+sub,(host,port));
+	myj = '{"username": "' + user + '", "sub" : "'+sub+'"}'
+	s.sendto(subscribePre+myj,(host,port));
 	d = s.recvfrom(1024)
 	reply = d[0]
 	addr = d[1]
@@ -215,14 +233,26 @@ def post_message():
 	#print pleaseWait
 	global postPre
 	message=raw_input("Message (no hashtags):")
-	hashtags=raw_input("HashTags:")
+	hashtags=raw_input("HashTags (separated by '#'):")
 	if len(message)+len(hashtags) > 140:
-		print 'Your message was too long, try again!'
+		print 'Your message + hashtags was ' + str(len(message) + len(hashtags)) + ', which is larger than the allowed 140. \nPlease try again!'
 		return post_message()
-	if message.find('|') != -1 or hashtags.find('|') != -1:
-		print 'you cannot use the \'|\' character, try again'	
-		return post_message()
-	s.sendto(postPre +user+'|' + message + '|'+hashtags,(host,port))
+	
+	if '"' in message:
+		message = message.replace('"','\\"')
+	#if "'" in message:
+	#	message = message.replace("'","\\'")
+	#	print 'replaced='+message
+	if '"' in hashtags:
+		hashtags = hashtags.replace('"','\\"')
+	#if "'" in hashtags:
+	#	hashtags = hashtags.replace("'","\\'")
+	hashtags = hashtags.split('#')
+	if '' in hashtags:
+		hashtags=filter(None,hashtags)
+	hashtags=return_json(hashtags)
+	myj='{"username": "'+user+'", "message": "'+message+'", "hashtags": '+hashtags+'}'
+	s.sendto(postPre+myj,(host,port))
 	d = s.recvfrom(1024)
 	reply = d[0]
 	if reply [:len(postPre)+1] == '1' + postPre:
@@ -237,25 +267,24 @@ def hashtag_search():
 	global searchPre
 	#print pleaseWait
 	print_header('Search Hashtag')
-	choice=raw_input("Search Hashtag:")
-	if ' ' in choice:
-		print 'You shouldn\' have spaces to search a hastag. Try again'
-		return hashtag_search()
-	elif '#' in choice:
-		print 'You passed in a \'#\', so we removed it'
-		choice = choice.replace('#','')
-	s.sendto(searchPre+choice,(host,port))
+	hashtags=raw_input("Search Hashtag:")
+	hashtags = hashtags.split('#')
+	if '' in hashtags:
+		hashtags=filter(None,hashtags)
+	s.sendto(searchPre+return_json(hashtags),(host,port))
 	d = s.recvfrom(1024)
 	reply = d[0]
 	addr = d[1]
 	if reply[:len(searchPre)+1]=='1'+searchPre:
 		msgs = reply[len(searchPre)+1:]
-		arr = msgs.split('|')
-		i=1
-		for message in arr:
-			print str(i) + ':' + message
-			i+=1
-			
+		myj=json.loads(msgs)
+		if len(myj) == 0:
+			print strline
+			print '\nNo results found for #'+ '#'.join(hashtags)
+			print strline
+		else:
+			print 'Results for #' + '#'.join(hashtags)
+			print_tweets(myj)
 	else:
 		print 'something bad happened'
 	return
@@ -279,9 +308,17 @@ def logout_user():
 	return
 
 def menu_disp():
-	
+	s.sendto(userMsgPre+user,(host,port))
+	d = s.recvfrom(1024)
+	reply = d[0]
+	msgcnt=''
+	if reply[:len(userMsgPre)+1] == '1'+userMsgPre:
+		msgcnt = reply[len(userMsgPre)+1:]
+	elif not msgcnt:
+		msgcnt='0'
+		print 'not initialized'
 	print_header('Menu')
-	print 'Welcome ' + user + ' You have '+msgs+' unread messages.'
+	print 'Welcome ' + user + ' You have '+msgcnt+' unread messages.'
 	print '1: See Offline Message'
 	print '2: Edit Subscriptions'
 	print '3: Post a Message'
@@ -309,7 +346,6 @@ def login_user():
 	global user
 	global passwd
 	global loginPre
-	global msgs
 
 	euser='Enter Username:'
 	epass='Enter Password:'
@@ -330,7 +366,6 @@ def login_user():
 	addr = d[1]
 	
 	if reply[:len(loginPre)+1] == '1'+loginPre:
-		msgs=reply[len(loginPre)+1:]
 		menu_disp();
 	else:
 		print 'Login Failed! Please Re-try!'

@@ -2,6 +2,7 @@ import socket
 import sys
 import time
 import signal
+import json
 from thread import *
 #from check import ip_checksum
 
@@ -12,6 +13,7 @@ class Message(object):
 		self.hashtags=hashtags
 		self.username=username
 		self.isRead=False
+		self.postTime=time.time()
 
 class User(object):
 	
@@ -19,7 +21,6 @@ class User(object):
 	def __init__(self, userName, passwd):
 		self.userName=userName
 		self.passwd=passwd
-		self.unreadmsg=[]
 		self.messages=[]
 		self.subscriptions=[]
 		self.isLogin=False
@@ -67,9 +68,26 @@ offlinePre='offline='
 offlineUserPre='offlineUser='
 postPre='post='
 searchPre='search='
+userMsgPre='msgcnt='
+
+def return_json(obj):
+	return json.dumps(obj, default=lambda o: o.__dict__)
 
 def check_input(functionT,field,text):
 	print functionT + '.'+field +':'+text
+
+def get_user_message_count(data):
+	global userMsgPre
+	username=data[len(userMsgPre):]
+	user = get_user(username)
+	msgcnt=0
+	for msg in user.messages:
+		if not msg.isRead:
+			msgcnt += 1
+	if user:
+		s.sendto('1'+userMsgPre+str(msgcnt),addr)
+	else:
+		s.sendto('0'+userMsgPre,addr)
 
 def get_user(username):
 	for user in userlist:
@@ -79,24 +97,21 @@ def get_user(username):
 
 def login_user(data):
 	
-        global loginPre
+	global loginPre
 	wasValid=False
-	#if data[:2] == '0=':
 	username=data[len(loginPre):data.find(':')]
 	passwd=data[data.find(':')+1:]
-	#print 'user:\"' + username + '\" pass:\"'+passwd+'\"'
 	mesgs=''
 	user = get_user(username)
 	if user and user.passwd == passwd:
-#	for user in userlist:
-#		if user.userName == username and user.passwd == passwd:
 		print 'Logged in user: ' + user.userName
-		mesgs=len(user.unreadmsg)
+		print return_json(user)
+		mesgs=len(user.messages)
 		user.isLogin=True
 		wasValid=True;
 		
 	if wasValid:
-		s.sendto('1'+loginPre+str(mesgs),addr);
+		s.sendto('1'+loginPre,addr);
 	else:
 		s.sendto('0'+loginPre,addr);
 	return
@@ -106,17 +121,14 @@ def login_user(data):
 def user_subscriptions(data):
 	global subscriptionsPre
 	username=data[len(subscriptionsPre):]
-	#check_input("user_sub",'data',data)
-	check_input("user_sub","username",username)
 	user = get_user(username)
 	if user:
-		subs=''
+		subs=[]
 		for sub in user.subscriptions:
-			if len(subs) == 0:
-				subs += sub
-			else:
-				subs += ':'+sub
-		s.sendto('1'+subscriptionsPre+subs,addr);
+			subs.append(sub)
+		print 'Returned subscriptions for \'' + user.userName + '\''
+		#print return_json(subs)
+		s.sendto('1'+subscriptionsPre+return_json(subs),addr);
 	else:
 		s.sendto('0'+subscriptionsPre,addr);
 	
@@ -125,12 +137,10 @@ def user_drop_subscription(data):
 	text=data[len(subscribeDropPre):]
 	username=text[:text.find(':')]
 	subrm=text[text.find(':')+1:]
-	#check_input("drop_sub",'data',data)
-	check_input("drop_sub","username",username)
-	check_input("drop_sub","sub",subrm)
 	user = get_user(username)
 	if user:
 		user.subscriptions.remove(subrm)
+		print 'Removed \''+subrm+'\' from \''+user.userName + '\' subscriptions'
 		s.sendto('1'+subscribeDropPre,addr)
 	else:
 		s.sendto('0'+subscribeDropPre,addr)
@@ -138,17 +148,16 @@ def user_drop_subscription(data):
 	
 def user_add_subscription(data):
 	global subscribePre
-	text=data[len(subscribePre):]
-	username=text[:text.find(':')]
-	subadd=text[text.find(':')+1:]
-	check_input("add_sub",'data',data)
-	check_input("add_sub","username",username)
-	check_input("add_sub","sub",subadd)
+	data=data[len(subscribePre):]
+	myj = json.loads(data)
+	username=myj["username"]
+	subadd=myj["sub"]
 	user = get_user(username)
 	adduser=get_user(subadd)
 	if adduser:
 		if subadd not in user.subscriptions and subadd != user.userName:
 			user.subscriptions.append(subadd);
+			print 'Added \''+subadd+'\' to \''+user.userName+'\' subscriptions'
 		s.sendto('1'+subscribePre,addr);
 	else:
 		s.sendto('0'+subscribePre,addr);
@@ -158,23 +167,19 @@ def user_add_subscription(data):
 def post_message(data):
 	global postPre
 	data = data[len(postPre):]
-	array = data.split('|')
-	if len(array) != 3:
-		print 'not 3' + array
-		s.sendto('0'+postPre,addr)
-	username=array[0]
-	message=array[1]
-	hashtags=array[2]	
+	print data
+	myj = json.loads(data)
+	username=myj["username"]
+	message=myj["message"]
+	hashtags=myj["hashtags"]
 	allPosts.append(Message(message,hashtags,username))
+	
 	for user in userlist:
 		if username in user.subscriptions:
-			#post realtime message
-			if not user.isLogin:
-				print '\nadding message offline message for ' + user.userName
-				print 'Message: ' + message
-				print 'Hashtags: ' + hashtags
-				print 'username: ' + username
-				user.unreadmsg.append(Message(message,hashtags,username))
+			user.messages.append(Message(message,hashtags,username))
+			#if not user.isLogin:
+			#	print '\nadding message offline message for ' + user.userName
+				
 	s.sendto('1'+postPre,addr)
 		
 	
@@ -197,7 +202,7 @@ def logout_user(data):
 #		if user.userName == username and user.passwd == passwd:
 		print 'logged out user: ' + user.userName;
 		user.isLogin=False
-		user.unreadmsg=[]
+		user.messages=[]
 		wasValid=True
 		
 	if wasValid:
@@ -211,10 +216,11 @@ def offline_all(data):
 	username=data[len(offlinePre):]
 	user = get_user(username)
 	res=[]
-	for msg in user.unreadmsg:
-		res.append(msg.message)
-	test = '|'.join(res)
-	s.sendto('1'+offlinePre+test,addr)
+	for msg in user.messages:
+		msg.isRead=True
+		res.append(msg)
+	#test = '|'.join(res)
+	s.sendto('1'+offlinePre+return_json(res),addr)
 	return
 	
 
@@ -225,53 +231,52 @@ def offline_user(data):
 	sub_user=data[data.find(':')+1:]
 	user = get_user(username)
 	res=[]
-	#print 'messages: ' + str(len(user.unreadmsg))
-	for msg in user.unreadmsg:
-		#print 'msgUser: ' + msg.username
-		#print 'subUser: ' + sub_user
+	for msg in user.messages:
 		if msg.username == sub_user:
-			#print 'Matched: ' + msg.message
-			res.append(msg.message)
-	test='|'.join(res)
-	s.sendto('1'+offlineUserPre+test,addr)
+			msg.isRead=True
+			res.append(msg)
+	s.sendto('1'+offlineUserPre+return_json(res),addr)
 
 def search_hashtag(data):
 	global searchPre
-	searchtag=data[len(searchPre):]
-	msgs=[]
-	for message in allPosts:
-		if len(msgs) == 10:
-			break
-		if message.hashtags.lower() == searchtag.lower():
-			msgs.append(message.message)
-	test = '|'.join(msgs)
-	s.sendto('1'+searchPre+test,addr)
+	tags=data[len(searchPre):]
+	print tags
+	res=[]
+	for searchtag in tags:
+		for message in allPosts:
+			if len(res) == 10:
+				break
+			for tag in message.hashtags:
+				if tag.lower() == searchtag.lower():
+					res.append(message)
+					break
+	s.sendto('1'+searchPre+return_json(res),addr)
 
 while 1:
 	d = s.recvfrom(1024)
 	data = d[0]
 	addr = d[1]
 	
-	if data.find(loginPre) != -1:
+	if loginPre in data:
 		login_user(data)
-	elif data.find(logoutPre) != -1:
+	elif logoutPre in data:
 		logout_user(data)
-	elif data.find(subscriptionsPre) != -1:
+	elif subscriptionsPre in data:
 		user_subscriptions(data)
-	elif data.find(subscribeDropPre) != -1:
+	elif subscribeDropPre in data:
 		user_drop_subscription(data)
-	elif data.find(subscribePre) != -1:
+	elif subscribePre in data:
 		user_add_subscription(data)
-	elif data.find(offlinePre) != -1:
+	elif offlinePre in data:
 		offline_all(data)
-	elif data.find(offlineUserPre) != -1:
+	elif offlineUserPre in data:
 		offline_user(data)
-	elif data.find(postPre) != -1:
+	elif postPre in data:
 		post_message(data)
-	elif data.find(searchPre) != -1:
+	elif searchPre in data:
 		search_hashtag(data)
-		pass
-		#user_add_subscription(data)
+	elif userMsgPre in data:
+		get_user_message_count(data)
 
 s.close()
 
