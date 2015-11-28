@@ -238,9 +238,9 @@ def drop_subscription(subs):
 			else:
 				print 'Error occured for unsubscribing to ' + subscriptions[choice-1]
 		else:
-			print 'Invalid Choice'
-			wait_enter()
 			drop_subscription(subs)
+	else:
+		wait_enter()
 			
 def add_subscription():
 	sub = raw_input("User to subscribe:")
@@ -252,7 +252,7 @@ def add_subscription():
 	if reply[:len(subscribePre)+1] == '1'+subscribePre:
 		print 'Successfully subscribed to ' + sub
 	else:
-		print 'Error: ' + sub + ' does not exist'
+		print 'user "' + sub + '" does not exist'
 	wait_enter()
 
 def edit_subscriptions():
@@ -276,8 +276,6 @@ def edit_subscriptions():
 	elif choice == '3':
 		return
 	else:
-		print 'Invalid choice! Please try again.'
-		wait_enter()
 		edit_subscriptions();
 	return
 

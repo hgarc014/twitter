@@ -149,7 +149,7 @@ def user_subscriptions(data):
 		subs=[]
 		for sub in user.subscriptions:
 			subs.append(sub)
-		print 'Returned subscriptions for \'' + user.userName + '\''
+		#print 'Returned subscriptions for \'' + user.userName + '\''
 		#print return_json(subs)
 		s.sendto('1'+subscriptionsPre+return_json(subs),addr);
 	else:
