@@ -18,11 +18,12 @@ class Message(object):
 class User(object):
 	
 
-	def __init__(self, userName, passwd):
+	def __init__(self, userName, passwd,isAdmin):
 		self.userName=userName
 		self.passwd=passwd
 		self.messages=[]
 		self.subscriptions=[]
+		self.isAdmin=isAdmin
 		self.isLogin=False
 
 
@@ -53,11 +54,11 @@ print 'Socket bind complete'
 
 userlist=[]
 allPosts=[]
-test=User('user','pass')
+test=User('user','pass',False)
 test.subscriptions.append('u')
 userlist.append(test);
-userlist.append(User('u','p'));
-userlist.append(User('admin','m'));
+userlist.append(User('u','p',False));
+userlist.append(User('admin','m',True));
 
 loginPre='login='
 logoutPre='logout='
@@ -69,6 +70,7 @@ offlineUserPre='offlineUser='
 postPre='post='
 searchPre='search='
 userMsgPre='msgcnt='
+adminPre='admin='
 
 def return_json(obj):
 	return json.dumps(obj, default=lambda o: o.__dict__)
@@ -76,15 +78,36 @@ def return_json(obj):
 def check_input(functionT,field,text):
 	print functionT + '.'+field +':'+text
 
+def admin_options(data):
+	global adminPre
+	data=data[len(adminPre):]
+	myj=json.loads(data)
+	user = get_user(myj["user"])
+	if user and user.isAdmin:
+		res='Invalid command!'
+		command = myj["command"]
+		if  command == "messagecount":
+			res=str(len(allPosts)) + ' messages received since server was activated'
+		elif command == "usercount":
+			i=0
+			for user in userlist:
+				if user.isLogin:
+					i+=1
+			res=str(i) + ' users are currently logged in'
+		s.sendto('1'+adminPre+res,addr)
+	else:
+		s.sendto('0'+adminPre,addr)
+
 def get_user_message_count(data):
 	global userMsgPre
 	username=data[len(userMsgPre):]
+	#print 'received:'+username
 	user = get_user(username)
 	msgcnt=0
-	for msg in user.messages:
-		if not msg.isRead:
-			msgcnt += 1
 	if user:
+		for msg in user.messages:
+			if not msg.isRead:
+				msgcnt += 1
 		s.sendto('1'+userMsgPre+str(msgcnt),addr)
 	else:
 		s.sendto('0'+userMsgPre,addr)
@@ -105,13 +128,13 @@ def login_user(data):
 	user = get_user(username)
 	if user and user.passwd == passwd:
 		print 'Logged in user: ' + user.userName
-		print return_json(user)
 		mesgs=len(user.messages)
 		user.isLogin=True
 		wasValid=True;
 		
 	if wasValid:
-		s.sendto('1'+loginPre,addr);
+		print return_json(user)
+		s.sendto('1'+loginPre+return_json(user),addr);
 	else:
 		s.sendto('0'+loginPre,addr);
 	return
@@ -167,7 +190,7 @@ def user_add_subscription(data):
 def post_message(data):
 	global postPre
 	data = data[len(postPre):]
-	print data
+	#print data
 	myj = json.loads(data)
 	username=myj["username"]
 	message=myj["message"]
@@ -240,16 +263,19 @@ def offline_user(data):
 def search_hashtag(data):
 	global searchPre
 	tags=data[len(searchPre):]
-	print tags
+	tags = json.loads(tags)
+	#print tags
 	res=[]
 	for searchtag in tags:
 		for message in allPosts:
 			if len(res) == 10:
 				break
 			for tag in message.hashtags:
+				#print tag.lower() + '=='+searchtag.lower()
 				if tag.lower() == searchtag.lower():
 					res.append(message)
 					break
+	#print return_json(res)
 	s.sendto('1'+searchPre+return_json(res),addr)
 
 while 1:
@@ -277,6 +303,8 @@ while 1:
 		search_hashtag(data)
 	elif userMsgPre in data:
 		get_user_message_count(data)
+	elif adminPre in data:
+		admin_options(data)
 
 s.close()
 

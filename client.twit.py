@@ -6,12 +6,12 @@ import sys
 import time
 import os
 import json
+from thread import *
 #from check import ip_checksum
 
 try:
 	s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 	s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
 except socket.error, msg:
 	print 'Failed to create socket. Error code: ' + str(msg[0]) + ' , Error message : ' + msg[1]
 	sys.exit();
@@ -24,7 +24,8 @@ port = 6481
 pleaseWait='\nPlease do not use this function it is under construction, thanks!\n'
 user=''
 passwd=''
-
+isAdmin=''
+msgcnt=''
 
 loginPre='login='
 logoutPre='logout='
@@ -36,8 +37,44 @@ offlineUserPre='offlineUser='
 postPre='post='
 searchPre='search='
 userMsgPre='msgcnt='
+adminPre='admin='
 
 strline='\n-----------------------------------------------'
+
+def update_msg_count():
+	global msgcnt
+	us.sendto(userMsgPre+user,(host,port))
+	d=us.recvfrom(1024)
+	reply = d[0]
+	if reply[:len(userMsgPre)+1] == '1'+userMsgPre and msgcnt != reply[len(userMsgPre)+1:]:
+		msgcnt = reply[len(userMsgPre)+1:]
+		return True
+	else:
+		return False
+
+def updateThread(name,empty):
+	global msgcnt
+	try:
+		us = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+		us.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+		while 1:
+			if len(user) > 0:
+				us.sendto(userMsgPre+user,(host,port))
+				d=us.recvfrom(1024)
+				reply = d[0]
+				if reply[:len(userMsgPre)+1] == '1'+userMsgPre and msgcnt != reply[len(userMsgPre)+1:]:
+					msgcnt = reply[len(userMsgPre)+1:]
+				#~ if update_msg_count():
+					print_messages()
+				time.sleep(1)
+				#~ else:
+					#~ print 'msgcnt wansnt updated'
+			else:
+				break
+		us.close()
+	except socket.error, msg:
+		print 'Failed to create socket. Error code: ' + str(msg[0]) + ' , Error message : ' + msg[1]
+		sys.exit();
 
 def return_json(obj):
 	return json.dumps(obj, default=lambda o: o.__dict__)
@@ -47,14 +84,23 @@ def clear_screen():
 	unused_var=os.system('clear')
 	
 def print_header(menu):
-	#clear_screen()
+	clear_screen()
 	print '\n====== ' + menu + ' ======\n'
 
-def print_tweets(tweets):
+def print_messages():
+	print '\nYou have '+msgcnt+' unread messages.'
+
+def wait_enter():
+	nothin=raw_input("Press <Enter> to continue")
+
+def print_tweets(tweets,emptymsg):
 	print strline
-	for message in tweets:
-		#print message
-		print_tweet(message)
+	if len(tweets) > 0:
+		for message in tweets:
+			#print message
+			print_tweet(message)
+	else:
+		print emptymsg
 	print strline
 
 def print_tweet(message):
@@ -80,9 +126,40 @@ def get_offline_messages():
 		msgs= reply[len(offlinePre)+1:]
 		print_header("Messages")
 		myj=json.loads(msgs)
-		print_tweets(myj)
+		print_tweets(myj,'No new messages')
+		wait_enter()
 	return
 
+
+def choose_offline_by_user(subs):
+	subscriptions = json.loads(subs)
+	i = print_subscriptions(subs,'Show offline messages from user')
+	if not i or i == 0:
+		wait_enter()
+		return
+	choice=raw_input("Choice:")
+	try:
+		choice = int(choice)
+	except ValueError:
+		pass
+	if type(choice) ==int and choice >= 1 and choice <= i:
+		if choice == i:
+			return	
+		#print 'sending:'+offlineUserPre+user+':'+subscriptions[choice-1]
+		s.sendto(offlineUserPre+user+':'+subscriptions[choice-1],(host,port))
+		d = s.recvfrom(1024)
+		reply = d[0]
+		addr = d[1]
+		if reply [:len(offlineUserPre)+1] == '1' + offlineUserPre:
+			msgs = reply[len(offlineUserPre)+1:]
+			print_header("Messages from " + subscriptions[choice-1])
+			myj = json.loads(msgs)
+			print_tweets(myj,'No new messages from '+subscriptions[choice-1])
+			wait_enter()
+		else:
+			print 'something bad happened'
+	else:
+		choose_offline_by_user(subs)
 
 def get_offline_by_user():
 	global offlineUserPre
@@ -92,33 +169,7 @@ def get_offline_by_user():
 	addr = d[1]
 	if reply[:len(subscriptionsPre)+1] == '1'+subscriptionsPre:
 		subs = reply[len(subscriptionsPre)+1:]
-		subscriptions = json.loads(subs)
-		i = print_subscriptions(subs,'Show offline messages from user')
-		if not i or i == 0:
-			return
-		choice=raw_input("Choice:")
-		try:
-			choice = int(choice)
-		except ValueError:
-			donothing=''
-		if type(choice) ==int and choice >= 1 and choice <= i:
-			if choice == i:
-				return	
-			#print 'sending:'+offlineUserPre+user+':'+subscriptions[choice-1]
-			s.sendto(offlineUserPre+user+':'+subscriptions[choice-1],(host,port))
-			d = s.recvfrom(1024)
-			reply = d[0]
-			addr = d[1]
-			if reply [:len(offlineUserPre)+1] == '1' + offlineUserPre:
-				msgs = reply[len(offlineUserPre)+1:]
-				print_header("Messages from " + subscriptions[choice-1])
-				myj = json.loads(msgs)
-				print_tweets(myj)
-			else:
-				print 'something bad happened'
-		else:
-			print 'Invalid choice. Please Try again'
-			get_offline_by_user()
+		choose_offline_by_user(subs)
 
 
 #offline messages
@@ -130,15 +181,16 @@ def offline_message():
 	print_header('Offline Messages')
 	print '1: see all offline messages'
 	print '2: see offline messages from user'
+	print '3: Cancel'
 	choice = raw_input('choice:')
 	if choice == '1':
 		get_offline_messages()
 	elif choice == '2':
 		get_offline_by_user()
+	elif choice == '3':
+		return
 	else:
-		print 'invalid choice. try again'
 		offline_message()
-	#print pleaseWait
 	return
 
 def print_subscriptions(subs,header):
@@ -182,10 +234,12 @@ def drop_subscription(subs):
 			addr = d[1]
 			if reply[:len(subscribeDropPre)+1] == '1'+subscribeDropPre:
 				print 'Successfully unsubscribed to ' + subscriptions[choice-1]
+				wait_enter()
 			else:
 				print 'Error occured for unsubscribing to ' + subscriptions[choice-1]
 		else:
 			print 'Invalid Choice'
+			wait_enter()
 			drop_subscription(subs)
 			
 def add_subscription():
@@ -199,6 +253,7 @@ def add_subscription():
 		print 'Successfully subscribed to ' + sub
 	else:
 		print 'Error: ' + sub + ' does not exist'
+	wait_enter()
 
 def edit_subscriptions():
 	#print pleaseWait
@@ -222,13 +277,10 @@ def edit_subscriptions():
 		return
 	else:
 		print 'Invalid choice! Please try again.'
+		wait_enter()
 		edit_subscriptions();
 	return
 
-#post message
-#140 characters or less
-#ask for hashtags afterwards
-#if larger than 140 notify user and tell them to re-enter (or cancel)
 def post_message():
 	#print pleaseWait
 	global postPre
@@ -236,17 +288,13 @@ def post_message():
 	hashtags=raw_input("HashTags (separated by '#'):")
 	if len(message)+len(hashtags) > 140:
 		print 'Your message + hashtags was ' + str(len(message) + len(hashtags)) + ', which is larger than the allowed 140. \nPlease try again!'
+		wait_enter()
 		return post_message()
 	
 	if '"' in message:
 		message = message.replace('"','\\"')
-	#if "'" in message:
-	#	message = message.replace("'","\\'")
-	#	print 'replaced='+message
 	if '"' in hashtags:
 		hashtags = hashtags.replace('"','\\"')
-	#if "'" in hashtags:
-	#	hashtags = hashtags.replace("'","\\'")
 	hashtags = hashtags.split('#')
 	if '' in hashtags:
 		hashtags=filter(None,hashtags)
@@ -257,6 +305,7 @@ def post_message():
 	reply = d[0]
 	if reply [:len(postPre)+1] == '1' + postPre:
 		print 'message sent successfully'
+		wait_enter()
 	else:
 		print 'failed to post ' + reply
 	return
@@ -279,12 +328,13 @@ def hashtag_search():
 		msgs = reply[len(searchPre)+1:]
 		myj=json.loads(msgs)
 		if len(myj) == 0:
-			print strline
-			print '\nNo results found for #'+ '#'.join(hashtags)
-			print strline
+			print_tweets(myj,'No results found for #'+'#'.join(hashtags))
+			wait_enter()
 		else:
-			print 'Results for #' + '#'.join(hashtags)
-			print_tweets(myj)
+			print_header('Results for #' + '#'.join(hashtags))
+			#print 'Results for #' + '#'.join(hashtags)
+			print_tweets(myj,'No results found for #'+'#'.join(hashtags))
+			wait_enter()
 	else:
 		print 'something bad happened'
 	return
@@ -300,6 +350,9 @@ def logout_user():
 	addr = d[1]
 	if reply == '1'+logoutPre:
 		print 'You have been logged out!'
+		user=''
+		passwd=''
+		wait_enter()
 	else:
 		print 'WARNING: error occured'
 		return logout_user()
@@ -307,18 +360,31 @@ def logout_user():
 	login_user();
 	return
 
+def admin_options():
+	global adminPre
+	print_header("Admin Commands")
+	command=raw_input("command:")
+	myj='{"user":"'+user+'","command":"'+command+'"}'
+	s.sendto(adminPre+myj,(host,port))
+	d=s.recvfrom(1024)
+	reply=d[0]
+	if reply[:len(adminPre)+1] == '1'+adminPre:
+		res = reply[len(adminPre)+1:]
+		print res
+	else:
+		print 'You do not have admin privilege'
+	wait_enter()
+	
+
 def menu_disp():
-	s.sendto(userMsgPre+user,(host,port))
-	d = s.recvfrom(1024)
-	reply = d[0]
-	msgcnt=''
-	if reply[:len(userMsgPre)+1] == '1'+userMsgPre:
-		msgcnt = reply[len(userMsgPre)+1:]
-	elif not msgcnt:
+	global msgcnt
+	if not msgcnt:
 		msgcnt='0'
 		print 'not initialized'
 	print_header('Menu')
 	print 'Welcome ' + user + ' You have '+msgcnt+' unread messages.'
+	if isAdmin:
+		print '0: Admin'
 	print '1: See Offline Message'
 	print '2: Edit Subscriptions'
 	print '3: Post a Message'
@@ -326,7 +392,10 @@ def menu_disp():
 	print '5: Logout'
 	
 	choice=raw_input("Choice:")
-	if choice == '1':
+	
+	if isAdmin and choice == '0':
+		admin_options()
+	elif choice == '1':
 		offline_message();
 	elif choice =='2':
 		edit_subscriptions();
@@ -346,7 +415,9 @@ def login_user():
 	global user
 	global passwd
 	global loginPre
+	global isAdmin
 
+	clear_screen();
 	euser='Enter Username:'
 	epass='Enter Password:'
 	
@@ -366,13 +437,16 @@ def login_user():
 	addr = d[1]
 	
 	if reply[:len(loginPre)+1] == '1'+loginPre:
+		data = reply[len(loginPre)+1:]
+		myj = json.loads(data)
+		isAdmin=myj["isAdmin"]
+		start_new_thread(updateThread,(user,''))
 		menu_disp();
 	else:
 		print 'Login Failed! Please Re-try!'
 		login_user()
 	return
 
-clear_screen();
 login_user();
 
 #while 1:
