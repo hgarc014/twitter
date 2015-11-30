@@ -6,6 +6,7 @@ import sys
 import time
 import os
 import json
+import getpass
 from thread import *
 #from check import ip_checksum
 
@@ -20,6 +21,19 @@ print 'Socket Created'
 
 host = 'localhost'
 port = 6481 
+
+
+class color:
+   PURPLE = '\033[95m'
+   CYAN = '\033[96m'
+   DARKCYAN = '\033[36m'
+   BLUE = '\033[94m'
+   GREEN = '\033[92m'
+   YELLOW = '\033[93m'
+   RED = '\033[91m'
+   BOLD = '\033[1m'
+   UNDERLINE = '\033[4m'
+   END = '\033[0m'
 
 pleaseWait='\nPlease do not use this function it is under construction, thanks!\n'
 user=''
@@ -38,8 +52,26 @@ postPre='post='
 searchPre='search='
 userMsgPre='msgcnt='
 adminPre='admin='
+followersPre='followers='
 
-strline='\n-----------------------------------------------'
+strline=color.BOLD+'\n-----------------------------------------------'+color.END
+
+def get_followers():
+	global followersPre
+	s.sendto(followersPre+user,(host,port))
+	d = s.recvfrom(1024)
+	reply = d[0]
+	if reply[:len(followersPre)+1] == '1'+followersPre:
+		data = reply[len(followersPre)+1:]
+		myj=json.loads(data)
+		print_header('Followers')
+		i=1
+		for name in myj:
+			print str(i)+':'+name
+			i+=1
+		if i == 1:
+			print 'You have no followers'
+		wait_enter()
 
 def update_msg_count():
 	global msgcnt
@@ -63,9 +95,10 @@ def updateThread(name,empty):
 				d=us.recvfrom(1024)
 				reply = d[0]
 				if reply[:len(userMsgPre)+1] == '1'+userMsgPre and msgcnt != reply[len(userMsgPre)+1:]:
+					oldcnt=msgcnt
 					msgcnt = reply[len(userMsgPre)+1:]
-				#~ if update_msg_count():
-					print_messages()
+					if oldcnt < msgcnt:
+						print_messages()
 				time.sleep(1)
 				#~ else:
 					#~ print 'msgcnt wansnt updated'
@@ -85,32 +118,64 @@ def clear_screen():
 	
 def print_header(menu):
 	clear_screen()
-	print '\n====== ' + menu + ' ======\n'
+	print color.GREEN + '\n====== ' + menu + ' ======\n' +color.END
 
 def print_messages():
-	print '\nYou have '+msgcnt+' unread messages.'
+	print color.BOLD + '\nYou have '+msgcnt+' unread messages.' + color.END
 
 def wait_enter():
-	nothin=raw_input("Press <Enter> to continue")
+	nothin=raw_input(color.GREEN + "\nPress <Enter> to continue" + color.END)
+
+def check_plural(val):
+	if int(val) == 1:
+		return ''
+	return 's'
+
+def get_current_time(old):
+	seconds=time.time() - old
+	multi=check_plural(seconds)
+	if seconds < 60:
+		return str(int(seconds)) + ' second'+multi+' ago'
+	minutes = seconds / 60
+	multi=check_plural(minutes)
+	if minutes < 60:
+		return str(int(minutes)) + ' minute'+multi+' ago'
+	hours = minutes / 60
+	multi=check_plural(hours)
+	if hours < 24:
+		return str(int(hours)) + ' hour'+multi+' ago'
+	days = hours / 24
+	multi=check_plural(days)
+	if days < 365:
+		return str(int(days)) + ' day'+multi+' ago'
+	years = days/365
+	multi=check_plural(years)
+	return str(int(years)) + ' year'+multi+' ago'
+	
+	
 
 def print_tweets(tweets,emptymsg):
 	print strline
 	if len(tweets) > 0:
 		for message in tweets:
-			#print message
-			print_tweet(message)
+			if not message['isRead']:
+				print color.BOLD
+				print_tweet(message)
+				print color.END
+			else:
+				print_tweet(message)
+			print strline
 	else:
-		print emptymsg
-	print strline
+		print color.YELLOW + '\n'+emptymsg + color.END
+		print strline
 
 def print_tweet(message):
-	#print '\n-----------------------------------------------'
-	print '\n@' +message['username']
+	timeago=get_current_time(message['postTime'])
+	print '\n@' +message['username'] + '\t'+ timeago
 	if len(message['hashtags']) > 0:
 		print '#' + '#'.join(message['hashtags'])
 	if len(message['message']) > 0:
 		print message['message']
-	#print '\n-----------------------------------------------'
 
 #------------------
 #while user logged in make sure to display real time message sent by any subscriptions
@@ -179,8 +244,8 @@ def get_offline_by_user():
 def offline_message():
 	global offlinePre
 	print_header('Offline Messages')
-	print '1: see all offline messages'
-	print '2: see offline messages from user'
+	print '1: see all messages'
+	print '2: see messages from a user'
 	print '3: Cancel'
 	choice = raw_input('choice:')
 	if choice == '1':
@@ -198,7 +263,7 @@ def print_subscriptions(subs,header):
 	#subscriptions=subs.split(':')
 	subscriptions = json.loads(subs)
 	if len(subscriptions) == 0:
-		print 'You have no subscriptions'
+		print color.YELLOW + 'You have no subscriptions'+ color.END
 		return
 	else:
 		i=0
@@ -288,6 +353,10 @@ def post_message():
 		print 'Your message + hashtags was ' + str(len(message) + len(hashtags)) + ', which is larger than the allowed 140. \nPlease try again!'
 		wait_enter()
 		return post_message()
+	elif len(message) + len(hashtags) == 0:
+		print 'Your message + hashtags was ' + str(len(message) + len(hashtags)) + ', which is not a valid message. \nPlease try again!'
+		wait_enter()
+		return post_message()
 	
 	if '"' in message:
 		message = message.replace('"','\\"')
@@ -362,7 +431,14 @@ def admin_options():
 	global adminPre
 	print_header("Admin Commands")
 	command=raw_input("command:")
-	myj='{"user":"'+user+'","command":"'+command+'"}'
+	myj=''
+	if command == 'newuser':
+		newuser=raw_input('new username:')
+		newpass=raw_input('new user passwd:')
+		newIsAdmin=raw_input('is user admin (T/F):')
+		myj='{"user":"'+user+'","command":"'+command+'","newuser":"'+newuser+'","passwd":"'+newpass+'","isAdmin":"'+newIsAdmin+'"}'
+	else:
+		myj='{"user":"'+user+'","command":"'+command+'"}'
 	s.sendto(adminPre+myj,(host,port))
 	d=s.recvfrom(1024)
 	reply=d[0]
@@ -380,14 +456,15 @@ def menu_disp():
 		msgcnt='0'
 		print 'not initialized'
 	print_header('Menu')
-	print 'Welcome ' + user + ' You have '+msgcnt+' unread messages.'
+	print 'Welcome ' + color.GREEN+ user+color.END + ' You have '+msgcnt+' unread messages.\n'
 	if isAdmin:
 		print '0: Admin'
-	print '1: See Offline Message'
+	print '1: Messages'
 	print '2: Edit Subscriptions'
 	print '3: Post a Message'
 	print '4: Hashtag Search'
-	print '5: Logout'
+	print '5: Followers'
+	print '6: Logout'
 	
 	choice=raw_input("Choice:")
 	
@@ -402,6 +479,8 @@ def menu_disp():
 	elif choice == '4':
 		hashtag_search();
 	elif choice == '5':
+		get_followers()
+	elif choice == '6':
 		logout_user();
 	else:
 		print 'Invalid Response! Try again!'
@@ -416,11 +495,11 @@ def login_user():
 	global isAdmin
 
 	clear_screen();
-	euser='Enter Username:'
-	epass='Enter Password:'
+	euser='Username:'
+	epass='Password:'
 	
 	user=raw_input(euser)
-	passwd=raw_input(epass)
+	passwd=getpass.getpass(epass)
 	
 	msg =loginPre+user+':'+passwd 
 	
@@ -441,7 +520,8 @@ def login_user():
 		start_new_thread(updateThread,(user,''))
 		menu_disp();
 	else:
-		print 'Login Failed! Please Re-try!'
+		print color.YELLOW+'Login Failed! Please Re-try!'+color.END
+		wait_enter()
 		login_user()
 	return
 

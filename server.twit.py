@@ -3,6 +3,7 @@ import sys
 import time
 import signal
 import json
+import os
 from thread import *
 #from check import ip_checksum
 
@@ -23,9 +24,15 @@ class User(object):
 		self.passwd=passwd
 		self.messages=[]
 		self.subscriptions=[]
+		self.followers=[]
 		self.isAdmin=isAdmin
 		self.isLogin=False
 
+	
+def clear_screen():
+	unused_var=os.system('clear')
+	
+clear_screen()
 
 
 def handler(signum, frame):
@@ -54,11 +61,13 @@ print 'Socket bind complete'
 
 userlist=[]
 allPosts=[]
-test=User('user','pass',False)
-test.subscriptions.append('u')
-userlist.append(test);
+userlist.append(User('user','pass',False));
 userlist.append(User('u','p',False));
 userlist.append(User('admin','m',True));
+
+for i in range(1,50):
+	userlist.append(User('u'+str(i),'p',False));
+
 
 loginPre='login='
 logoutPre='logout='
@@ -71,12 +80,24 @@ postPre='post='
 searchPre='search='
 userMsgPre='msgcnt='
 adminPre='admin='
+followersPre='followers='
+
+def get_followers(data):
+	global followersPre
+	data = data[len(followersPre):]
+	user = get_user(data)
+	#print user.userName+' has followers:'+ ', '.join(user.followers)
+	if user:
+		s.sendto('1'+followersPre+return_json(user.followers),addr)
+	else:
+		s.sendto('0'+followersPre,addr)
 
 def return_json(obj):
 	return json.dumps(obj, default=lambda o: o.__dict__)
 
 def check_input(functionT,field,text):
 	print functionT + '.'+field +':'+text
+
 
 def admin_options(data):
 	global adminPre
@@ -94,6 +115,32 @@ def admin_options(data):
 				if user.isLogin:
 					i+=1
 			res=str(i) + ' users are currently logged in'
+		elif command == 'storedcount':
+			i=0
+			for user in userlist:
+				if not user.isLogin:
+					for message in user.messages:
+						i += 1
+			res=str(i) + ' messages have not yet been delivered because the user is offline'
+		elif command == 'newuser':
+			newUser=get_user(myj['newuser'])
+			newIsAdmin=myj['isAdmin']
+			newuser=myj['newuser']
+			newpass=myj['passwd']
+			if newIsAdmin == 'T':
+				newIsAdmin=True
+			else:
+				newIsAdmin=False
+			if not newUser and len(newuser) > 0 and len(newpass)>0:
+				userlist.append(User(newuser,newpass,newIsAdmin))
+				res='Successfully created user "'+newuser+'" password "'+newpass+'" isAdmin "'+str(newIsAdmin)+'"'
+			elif newUser:
+				res='User "'+newUser.userName+'" already exists'
+			else:
+				res='Failed to create user "'+newuser+'" password "'+newpass+'" isAdmin "'+str(newIsAdmin)+'"'
+		elif command == 'commands':
+			commands=['messagecount','usercount','storedcount','newuser']
+			res='\n*'+'\n*'.join(commands)
 		s.sendto('1'+adminPre+res,addr)
 	else:
 		s.sendto('0'+adminPre,addr)
@@ -133,7 +180,7 @@ def login_user(data):
 		wasValid=True;
 		
 	if wasValid:
-		print return_json(user)
+		#print return_json(user)
 		s.sendto('1'+loginPre+return_json(user),addr);
 	else:
 		s.sendto('0'+loginPre,addr);
@@ -150,7 +197,6 @@ def user_subscriptions(data):
 		for sub in user.subscriptions:
 			subs.append(sub)
 		#print 'Returned subscriptions for \'' + user.userName + '\''
-		#print return_json(subs)
 		s.sendto('1'+subscriptionsPre+return_json(subs),addr);
 	else:
 		s.sendto('0'+subscriptionsPre,addr);
@@ -161,8 +207,10 @@ def user_drop_subscription(data):
 	username=text[:text.find(':')]
 	subrm=text[text.find(':')+1:]
 	user = get_user(username)
+	subuser=get_user(subrm)
 	if user:
 		user.subscriptions.remove(subrm)
+		subuser.followers.remove(user.userName)
 		print 'Removed \''+subrm+'\' from \''+user.userName + '\' subscriptions'
 		s.sendto('1'+subscribeDropPre,addr)
 	else:
@@ -180,6 +228,8 @@ def user_add_subscription(data):
 	if adduser:
 		if subadd not in user.subscriptions and subadd != user.userName:
 			user.subscriptions.append(subadd);
+			adduser.followers.append(user.userName)
+			print 'Added "'+user.userName+'" to "'+subadd+'" followers'
 			print 'Added \''+subadd+'\' to \''+user.userName+'\' subscriptions'
 		s.sendto('1'+subscribePre,addr);
 	else:
@@ -190,18 +240,17 @@ def user_add_subscription(data):
 def post_message(data):
 	global postPre
 	data = data[len(postPre):]
-	#print data
 	myj = json.loads(data)
 	username=myj["username"]
 	message=myj["message"]
 	hashtags=myj["hashtags"]
-	allPosts.append(Message(message,hashtags,username))
+	allmsg=Message(message,hashtags,username)
+	allmsg.isRead=True
+	allPosts.append(allmsg)
 	
 	for user in userlist:
 		if username in user.subscriptions:
 			user.messages.append(Message(message,hashtags,username))
-			#if not user.isLogin:
-			#	print '\nadding message offline message for ' + user.userName
 				
 	s.sendto('1'+postPre,addr)
 		
@@ -217,7 +266,6 @@ def logout_user(data):
         global logoutPre
 	username=data[len(logoutPre) : data.find(':')]
 	passwd=data[data.find(':')+1:]
-	#print 'user:\"' + username + '\" pass:\"'+passwd+'\"'
 	wasValid=False
 	user = get_user(username)
 	if user and user.passwd == passwd:
@@ -234,16 +282,20 @@ def logout_user(data):
 		s.sendto('0'+logoutPre,addr);
 	return
 
+def make_msgs_read(msgs):
+	for msg in msgs:
+		msg.isRead=True
+
 def offline_all(data):
 	global offlinePre
 	username=data[len(offlinePre):]
 	user = get_user(username)
 	res=[]
 	for msg in user.messages:
-		msg.isRead=True
 		res.append(msg)
-	#test = '|'.join(res)
+	res.reverse()
 	s.sendto('1'+offlinePre+return_json(res),addr)
+	make_msgs_read(res)
 	return
 	
 
@@ -256,26 +308,25 @@ def offline_user(data):
 	res=[]
 	for msg in user.messages:
 		if msg.username == sub_user:
-			msg.isRead=True
 			res.append(msg)
+	res.reverse()
 	s.sendto('1'+offlineUserPre+return_json(res),addr)
+	make_msgs_read(res)
 
 def search_hashtag(data):
 	global searchPre
 	tags=data[len(searchPre):]
 	tags = json.loads(tags)
-	#print tags
 	res=[]
 	for searchtag in tags:
 		for message in allPosts:
 			if len(res) == 10:
 				break
 			for tag in message.hashtags:
-				#print tag.lower() + '=='+searchtag.lower()
 				if tag.lower() == searchtag.lower():
 					res.append(message)
 					break
-	#print return_json(res)
+	res.reverse()
 	s.sendto('1'+searchPre+return_json(res),addr)
 
 while 1:
@@ -305,6 +356,8 @@ while 1:
 		get_user_message_count(data)
 	elif adminPre in data:
 		admin_options(data)
-
+	elif followersPre in data:
+		get_followers(data)
+		
 s.close()
 
