@@ -4,6 +4,7 @@ import time
 import signal
 import json
 import os
+import hashlib
 from thread import *
 #from check import ip_checksum
 
@@ -59,14 +60,17 @@ except socket.error, msg:
 
 print 'Socket bind complete'
 
+def md5(passwd):
+	return hashlib.md5(passwd.encode('utf-8')).hexdigest()
+
 userlist=[]
 allPosts=[]
-userlist.append(User('user','pass',False));
-userlist.append(User('u','p',False));
-userlist.append(User('admin','m',True));
+userlist.append(User('user',md5('p'),False));
+userlist.append(User('u',md5('p'),False));
+userlist.append(User('admin',md5('p'),True));
 
-for i in range(1,50):
-	userlist.append(User('u'+str(i),'p',False));
+for i in range(1,51):
+	userlist.append(User('u'+str(i),md5('p'),False));
 
 
 loginPre='login='
@@ -81,6 +85,21 @@ searchPre='search='
 userMsgPre='msgcnt='
 adminPre='admin='
 followersPre='followers='
+changePassPre='changePass='
+
+def change_pass(data):
+	global changePassPre
+	data = data[len(changePassPre):]
+	myj=json.loads(data)
+	username=myj['username']
+	oldpass=myj['currentpass']
+	newpass=myj['newpass']
+	user = get_user(username)
+	if user and user.passwd == oldpass:
+		user.passwd=newpass
+		s.sendto('1'+changePassPre,addr)
+	else:
+		s.sendto('0'+changePassPre,addr)
 
 def get_followers(data):
 	global followersPre
@@ -133,11 +152,11 @@ def admin_options(data):
 				newIsAdmin=False
 			if not newUser and len(newuser) > 0 and len(newpass)>0:
 				userlist.append(User(newuser,newpass,newIsAdmin))
-				res='Successfully created user "'+newuser+'" password "'+newpass+'" isAdmin "'+str(newIsAdmin)+'"'
+				res='Successfully created user "'+newuser+'" isAdmin "'+str(newIsAdmin)+'"'
 			elif newUser:
 				res='User "'+newUser.userName+'" already exists'
 			else:
-				res='Failed to create user "'+newuser+'" password "'+newpass+'" isAdmin "'+str(newIsAdmin)+'"'
+				res='Failed to create user "'+newuser+'" isAdmin "'+str(newIsAdmin)+'"'
 		elif command == 'commands':
 			commands=['messagecount','usercount','storedcount','newuser']
 			res='\n*'+'\n*'.join(commands)
@@ -169,8 +188,10 @@ def login_user(data):
 	
 	global loginPre
 	wasValid=False
-	username=data[len(loginPre):data.find(':')]
-	passwd=data[data.find(':')+1:]
+	data = data[len(loginPre):]
+	myj=json.loads(data)
+	username=myj['username']
+	passwd=myj['passwd']
 	mesgs=''
 	user = get_user(username)
 	if user and user.passwd == passwd:
@@ -264,11 +285,10 @@ def post_message(data):
 
 def logout_user(data):
         global logoutPre
-	username=data[len(logoutPre) : data.find(':')]
-	passwd=data[data.find(':')+1:]
+	username=data[len(logoutPre):]
 	wasValid=False
 	user = get_user(username)
-	if user and user.passwd == passwd:
+	if user:
 #	for user in userlist:
 #		if user.userName == username and user.passwd == passwd:
 		print 'logged out user: ' + user.userName;
@@ -293,7 +313,7 @@ def offline_all(data):
 	res=[]
 	for msg in user.messages:
 		res.append(msg)
-	res.reverse()
+	#res.reverse()
 	s.sendto('1'+offlinePre+return_json(res),addr)
 	make_msgs_read(res)
 	return
@@ -309,7 +329,7 @@ def offline_user(data):
 	for msg in user.messages:
 		if msg.username == sub_user:
 			res.append(msg)
-	res.reverse()
+	#res.reverse()
 	s.sendto('1'+offlineUserPre+return_json(res),addr)
 	make_msgs_read(res)
 
@@ -326,7 +346,7 @@ def search_hashtag(data):
 				if tag.lower() == searchtag.lower():
 					res.append(message)
 					break
-	res.reverse()
+	#res.reverse()
 	s.sendto('1'+searchPre+return_json(res),addr)
 
 while 1:
@@ -358,6 +378,8 @@ while 1:
 		admin_options(data)
 	elif followersPre in data:
 		get_followers(data)
+	elif changePassPre in data:
+		change_pass(data)
 		
 s.close()
 

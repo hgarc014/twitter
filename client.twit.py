@@ -7,6 +7,7 @@ import time
 import os
 import json
 import getpass
+import hashlib
 from thread import *
 #from check import ip_checksum
 
@@ -21,7 +22,10 @@ print 'Socket Created'
 
 host = 'localhost'
 port = 6481 
+recvBuffer=2048
 
+def md5(passwd):
+	return hashlib.md5(passwd.encode('utf-8')).hexdigest()
 
 class color:
    PURPLE = '\033[95m'
@@ -53,13 +57,14 @@ searchPre='search='
 userMsgPre='msgcnt='
 adminPre='admin='
 followersPre='followers='
+changePassPre='changePass='
 
 strline=color.BOLD+'\n-----------------------------------------------'+color.END
 
 def get_followers():
 	global followersPre
 	s.sendto(followersPre+user,(host,port))
-	d = s.recvfrom(1024)
+	d = s.recvfrom(recvBuffer)
 	reply = d[0]
 	if reply[:len(followersPre)+1] == '1'+followersPre:
 		data = reply[len(followersPre)+1:]
@@ -76,7 +81,7 @@ def get_followers():
 def update_msg_count():
 	global msgcnt
 	us.sendto(userMsgPre+user,(host,port))
-	d=us.recvfrom(1024)
+	d=us.recvfrom(recvBuffer)
 	reply = d[0]
 	if reply[:len(userMsgPre)+1] == '1'+userMsgPre and msgcnt != reply[len(userMsgPre)+1:]:
 		msgcnt = reply[len(userMsgPre)+1:]
@@ -92,7 +97,7 @@ def updateThread(name,empty):
 		while 1:
 			if len(user) > 0:
 				us.sendto(userMsgPre+user,(host,port))
-				d=us.recvfrom(1024)
+				d=us.recvfrom(recvBuffer)
 				reply = d[0]
 				if reply[:len(userMsgPre)+1] == '1'+userMsgPre and msgcnt != reply[len(userMsgPre)+1:]:
 					oldcnt=msgcnt
@@ -153,7 +158,6 @@ def get_current_time(old):
 	return str(int(years)) + ' year'+multi+' ago'
 	
 	
-
 def print_tweets(tweets,emptymsg):
 	print strline
 	if len(tweets) > 0:
@@ -184,7 +188,7 @@ def print_tweet(message):
 def get_offline_messages():
 	global offlinePre
 	s.sendto(offlinePre+user,(host,port))
-	d=s.recvfrom(1024)
+	d=s.recvfrom(recvBuffer)
 	reply = d[0]
 	addr = d[1]
 	if reply [:len(offlinePre)+1] == '1' + offlinePre:
@@ -212,7 +216,7 @@ def choose_offline_by_user(subs):
 			return	
 		#print 'sending:'+offlineUserPre+user+':'+subscriptions[choice-1]
 		s.sendto(offlineUserPre+user+':'+subscriptions[choice-1],(host,port))
-		d = s.recvfrom(1024)
+		d = s.recvfrom(recvBuffer)
 		reply = d[0]
 		addr = d[1]
 		if reply [:len(offlineUserPre)+1] == '1' + offlineUserPre:
@@ -229,7 +233,7 @@ def choose_offline_by_user(subs):
 def get_offline_by_user():
 	global offlineUserPre
 	s.sendto(subscriptionsPre+user,(host,port));
-	d = s.recvfrom(1024)
+	d = s.recvfrom(recvBuffer)
 	reply = d[0]
 	addr = d[1]
 	if reply[:len(subscriptionsPre)+1] == '1'+subscriptionsPre:
@@ -294,7 +298,7 @@ def drop_subscription(subs):
 			if choice == i:
 				return
 			s.sendto(subscribeDropPre+user+':'+subscriptions[choice-1],(host,port))
-			d = s.recvfrom(1024)
+			d = s.recvfrom(recvBuffer)
 			reply = d[0]
 			addr = d[1]
 			if reply[:len(subscribeDropPre)+1] == '1'+subscribeDropPre:
@@ -311,7 +315,7 @@ def add_subscription():
 	sub = raw_input("User to subscribe:")
 	myj = '{"username": "' + user + '", "sub" : "'+sub+'"}'
 	s.sendto(subscribePre+myj,(host,port));
-	d = s.recvfrom(1024)
+	d = s.recvfrom(recvBuffer)
 	reply = d[0]
 	addr = d[1]
 	if reply[:len(subscribePre)+1] == '1'+subscribePre:
@@ -331,7 +335,7 @@ def edit_subscriptions():
 		add_subscription()
 	elif choice == '2':
 		s.sendto(subscriptionsPre+user,(host,port));
-		d = s.recvfrom(1024)
+		d = s.recvfrom(recvBuffer)
 		reply = d[0]
 		addr = d[1]
 		if reply[:len(subscriptionsPre)+1] == '1'+subscriptionsPre:
@@ -368,7 +372,7 @@ def post_message():
 	hashtags=return_json(hashtags)
 	myj='{"username": "'+user+'", "message": "'+message+'", "hashtags": '+hashtags+'}'
 	s.sendto(postPre+myj,(host,port))
-	d = s.recvfrom(1024)
+	d = s.recvfrom(recvBuffer)
 	reply = d[0]
 	if reply [:len(postPre)+1] == '1' + postPre:
 		print 'message sent successfully'
@@ -377,8 +381,6 @@ def post_message():
 		print 'failed to post ' + reply
 	return
 
-#hashtag search
-#user will see 10 tweets containing hashtag
 def hashtag_search():
 	global searchPre
 	#print pleaseWait
@@ -388,7 +390,7 @@ def hashtag_search():
 	if '' in hashtags:
 		hashtags=filter(None,hashtags)
 	s.sendto(searchPre+return_json(hashtags),(host,port))
-	d = s.recvfrom(1024)
+	d = s.recvfrom(2048)
 	reply = d[0]
 	addr = d[1]
 	if reply[:len(searchPre)+1]=='1'+searchPre:
@@ -398,7 +400,10 @@ def hashtag_search():
 			print_tweets(myj,'No results found for #'+'#'.join(hashtags))
 			wait_enter()
 		else:
-			print_header('Results for #' + '#'.join(hashtags))
+			if len(myj) == 10:
+				print_header('Top '+str(len(myj))+' results for #' + '#'.join(hashtags))
+			else:
+				print_header(str(len(myj))+' results for #' + '#'.join(hashtags))
 			#print 'Results for #' + '#'.join(hashtags)
 			print_tweets(myj,'No results found for #'+'#'.join(hashtags))
 			wait_enter()
@@ -411,8 +416,8 @@ def logout_user():
 	global passwd
 	global logoutPre
 	
-	s.sendto(logoutPre+user+':'+passwd, (host,port));
-	d= s.recvfrom(1024)
+	s.sendto(logoutPre+user, (host,port));
+	d= s.recvfrom(recvBuffer)
 	reply = d[0]
 	addr = d[1]
 	if reply == '1'+logoutPre:
@@ -423,7 +428,6 @@ def logout_user():
 	else:
 		print 'WARNING: error occured'
 		return logout_user()
-	#TODO: tell server you logged out
 	login_user();
 	return
 
@@ -435,18 +439,44 @@ def admin_options():
 	if command == 'newuser':
 		newuser=raw_input('new username:')
 		newpass=raw_input('new user passwd:')
+		newpass=md5(newpass)
 		newIsAdmin=raw_input('is user admin (T/F):')
 		myj='{"user":"'+user+'","command":"'+command+'","newuser":"'+newuser+'","passwd":"'+newpass+'","isAdmin":"'+newIsAdmin+'"}'
 	else:
 		myj='{"user":"'+user+'","command":"'+command+'"}'
 	s.sendto(adminPre+myj,(host,port))
-	d=s.recvfrom(1024)
+	d=s.recvfrom(recvBuffer)
 	reply=d[0]
 	if reply[:len(adminPre)+1] == '1'+adminPre:
 		res = reply[len(adminPre)+1:]
 		print res
 	else:
 		print 'You do not have admin privilege'
+	wait_enter()
+	
+def change_password():
+	global changePassPre
+	global passwd
+	current_password=getpass.getpass('Current Password:')
+	new_password=getpass.getpass('New Password:')
+	confirm_new=getpass.getpass('Confirm new password:')
+	if new_password != confirm_new:
+		print 'New passwords did not match. '
+		return wait_enter()
+	elif len(new_password) + len(confirm_new) == 0:
+		print 'Passwords cannot be empty.'
+		return wait_enter()
+	current_password=md5(current_password)
+	new_password=md5(new_password)
+	myj='{"username":"'+user+'", "currentpass":"'+current_password+'", "newpass" : "'+new_password+'"}'
+	s.sendto(changePassPre+myj,(host,port))
+	d = s.recvfrom(recvBuffer)
+	reply=d[0]
+	if reply[:len(changePassPre)+1] == '1'+changePassPre:
+		print 'successfully updated password!'
+		passwd=new_password
+	else:
+		print 'Your current password was invalid. Your password was not changed'
 	wait_enter()
 	
 
@@ -464,7 +494,8 @@ def menu_disp():
 	print '3: Post a Message'
 	print '4: Hashtag Search'
 	print '5: Followers'
-	print '6: Logout'
+	print '6: Change Password'
+	print '7: Logout'
 	
 	choice=raw_input("Choice:")
 	
@@ -481,6 +512,8 @@ def menu_disp():
 	elif choice == '5':
 		get_followers()
 	elif choice == '6':
+		change_password()
+	elif choice == '7':
 		logout_user();
 	else:
 		print 'Invalid Response! Try again!'
@@ -495,21 +528,30 @@ def login_user():
 	global isAdmin
 
 	clear_screen();
+	
+	print_header("Login to Simple Twitter")
+	print color.YELLOW + 'Leave username and password blank to exit application\n' +color.END
+	
 	euser='Username:'
 	epass='Password:'
 	
 	user=raw_input(euser)
 	passwd=getpass.getpass(epass)
 	
-	msg =loginPre+user+':'+passwd 
+	if len(user)+len(passwd) == 0:
+		print '\nExiting Program. See you soon!'
+		return
+	
+	passwd=md5(passwd)
+	myj='{"username":"'+user+'","passwd":"'+passwd+'"}'
 	
 	try:
-		s.sendto(msg, (host, port))
+		s.sendto(loginPre+myj, (host, port))
 	except socket.error, msg:
 		print 'Error code : ' + str(msg[0]) + ' Message ' + msg[1]
 		sys.exit()
 	
-	d = s.recvfrom(1024)
+	d = s.recvfrom(recvBuffer)
 	reply = d[0]
 	addr = d[1]
 	
@@ -527,20 +569,6 @@ def login_user():
 
 login_user();
 
-#while 1:
-#
-#	d = s.recvfrom(1024)
-#	reply = d[0]
-#	addr = d[1]
-#
-#	print 'Server reply : ' + reply
-#
-#	try:
-#		s.sendto(reply, (host, port))
-#
-#	except socket.error, msg:
-#		print 'Error code : ' + str(msg[0]) + ' Message ' + msg[1]
-#		sys.exit()
 
 s.close()
 
