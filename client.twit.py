@@ -104,9 +104,9 @@ def updateThread(name,empty):
 				
 				if reply[:len(userMsgPre)+1] == '1'+userMsgPre and msgcnt != reply[len(userMsgPre)+1:]:
 					oldcnt=msgcnt
-					print 'old msgcnt='+msgcnt
+					#print 'old msgcnt='+msgcnt
 					msgcnt = reply[len(userMsgPre)+1:]
-					print 'received msgcnt='+msgcnt
+					#print 'received msgcnt='+msgcnt
 					if oldcnt < msgcnt:
 						print_messages()
 				#~ else:
