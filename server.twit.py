@@ -6,8 +6,8 @@ import json
 import os
 import hashlib
 from thread import *
-#from check import ip_checksum
-
+#from serverinfo import *
+#from sharedinfo import *
 class Message(object):
 	
 	def __init__(self, message,hashtags,username):
@@ -47,18 +47,22 @@ PORT = 6481
 
 pkt='packet'
 
-s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 print 'Socket created'
 
 try:
-	s.bind((HOST, PORT))
 	s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+	s.bind((HOST, PORT))
+	
 
 except socket.error, msg:
 	print 'Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
 	sys.exit()
 
+
 print 'Socket bind complete'
+
+s.listen(10)
 
 def md5(passwd):
 	return hashlib.md5(passwd.encode('utf-8')).hexdigest()
@@ -87,7 +91,7 @@ adminPre='admin='
 followersPre='followers='
 changePassPre='changePass='
 
-def change_pass(data):
+def change_pass(conn,data):
 	global changePassPre
 	data = data[len(changePassPre):]
 	myj=json.loads(data)
@@ -97,19 +101,19 @@ def change_pass(data):
 	user = get_user(username)
 	if user and user.passwd == oldpass:
 		user.passwd=newpass
-		s.sendto('1'+changePassPre,addr)
+		conn.send('1'+changePassPre)
 	else:
-		s.sendto('0'+changePassPre,addr)
+		conn.send('0'+changePassPre)
 
-def get_followers(data):
+def get_followers(conn,data):
 	global followersPre
 	data = data[len(followersPre):]
 	user = get_user(data)
 	#print user.userName+' has followers:'+ ', '.join(user.followers)
 	if user:
-		s.sendto('1'+followersPre+return_json(user.followers),addr)
+		conn.send('1'+followersPre+return_json(user.followers))
 	else:
-		s.sendto('0'+followersPre,addr)
+		conn.send('0'+followersPre)
 
 def return_json(obj):
 	return json.dumps(obj, default=lambda o: o.__dict__)
@@ -118,7 +122,7 @@ def check_input(functionT,field,text):
 	print functionT + '.'+field +':'+text
 
 
-def admin_options(data):
+def admin_options(conn,data):
 	global adminPre
 	data=data[len(adminPre):]
 	myj=json.loads(data)
@@ -160,11 +164,11 @@ def admin_options(data):
 		elif command == 'commands':
 			commands=['messagecount','usercount','storedcount','newuser']
 			res='\n*'+'\n*'.join(commands)
-		s.sendto('1'+adminPre+res,addr)
+		conn.send('1'+adminPre+res)
 	else:
-		s.sendto('0'+adminPre,addr)
+		conn.send('0'+adminPre)
 
-def get_user_message_count(data):
+def get_user_message_count(conn,data):
 	global userMsgPre
 	username=data[len(userMsgPre):]
 	#print 'received:'+username
@@ -174,9 +178,9 @@ def get_user_message_count(data):
 		for msg in user.messages:
 			if not msg.isRead:
 				msgcnt += 1
-		s.sendto('1'+userMsgPre+str(msgcnt),addr)
+		conn.send('1'+userMsgPre+str(msgcnt))
 	else:
-		s.sendto('0'+userMsgPre,addr)
+		conn.send('0'+userMsgPre)
 
 def get_user(username):
 	for user in userlist:
@@ -184,7 +188,7 @@ def get_user(username):
 			return user
 	return
 
-def login_user(data):
+def login_user(conn,data):
 	
 	global loginPre
 	wasValid=False
@@ -202,14 +206,15 @@ def login_user(data):
 		
 	if wasValid:
 		#print return_json(user)
-		s.sendto('1'+loginPre+return_json(user),addr);
+		conn.send('1'+loginPre+return_json(user));
+		return username
 	else:
-		s.sendto('0'+loginPre,addr);
+		conn.send('0'+loginPre);
 	return
 
 
 #allow changing of subscriptions, but only subscribe to valid users
-def user_subscriptions(data):
+def user_subscriptions(conn,data):
 	global subscriptionsPre
 	username=data[len(subscriptionsPre):]
 	user = get_user(username)
@@ -218,11 +223,11 @@ def user_subscriptions(data):
 		for sub in user.subscriptions:
 			subs.append(sub)
 		#print 'Returned subscriptions for \'' + user.userName + '\''
-		s.sendto('1'+subscriptionsPre+return_json(subs),addr);
+		conn.send('1'+subscriptionsPre+return_json(subs));
 	else:
-		s.sendto('0'+subscriptionsPre,addr);
+		conn.send('0'+subscriptionsPre);
 	
-def user_drop_subscription(data):
+def user_drop_subscription(conn,data):
 	global subscribeDropPre
 	text=data[len(subscribeDropPre):]
 	username=text[:text.find(':')]
@@ -233,12 +238,12 @@ def user_drop_subscription(data):
 		user.subscriptions.remove(subrm)
 		subuser.followers.remove(user.userName)
 		print 'Removed \''+subrm+'\' from \''+user.userName + '\' subscriptions'
-		s.sendto('1'+subscribeDropPre,addr)
+		conn.send('1'+subscribeDropPre)
 	else:
-		s.sendto('0'+subscribeDropPre,addr)
+		conn.send('0'+subscribeDropPre)
 	
 	
-def user_add_subscription(data):
+def user_add_subscription(conn,data):
 	global subscribePre
 	data=data[len(subscribePre):]
 	myj = json.loads(data)
@@ -252,13 +257,13 @@ def user_add_subscription(data):
 			adduser.followers.append(user.userName)
 			print 'Added "'+user.userName+'" to "'+subadd+'" followers'
 			print 'Added \''+subadd+'\' to \''+user.userName+'\' subscriptions'
-		s.sendto('1'+subscribePre,addr);
+		conn.send('1'+subscribePre);
 	else:
-		s.sendto('0'+subscribePre,addr);
+		conn.send('0'+subscribePre);
 	
 #list = Class(stuff) + list
 	
-def post_message(data):
+def post_message(conn,data):
 	global postPre
 	data = data[len(postPre):]
 	myj = json.loads(data)
@@ -273,7 +278,7 @@ def post_message(data):
 		if username in user.subscriptions:
 			user.messages.append(Message(message,hashtags,username))
 				
-	s.sendto('1'+postPre,addr)
+	conn.send('1'+postPre)
 		
 	
 	
@@ -283,7 +288,7 @@ def post_message(data):
 
 #allow admin to type messagecount in order to display number of received messages since server was activated
 
-def logout_user(data):
+def logout_user(conn,data):
         global logoutPre
 	username=data[len(logoutPre):]
 	wasValid=False
@@ -297,16 +302,15 @@ def logout_user(data):
 		wasValid=True
 		
 	if wasValid:
-		s.sendto('1'+logoutPre,addr);
+		conn.send('1'+logoutPre);
 	else:
-		s.sendto('0'+logoutPre,addr);
-	return
+		conn.send('0'+logoutPre);
 
 def make_msgs_read(msgs):
 	for msg in msgs:
 		msg.isRead=True
 
-def offline_all(data):
+def offline_all(conn,data):
 	global offlinePre
 	username=data[len(offlinePre):]
 	user = get_user(username)
@@ -314,13 +318,11 @@ def offline_all(data):
 	for msg in user.messages:
 		res.append(msg)
 	#res.reverse()
-	s.sendto('1'+offlinePre+return_json(res),addr)
+	conn.send('1'+offlinePre+return_json(res))
 	make_msgs_read(res)
-	return
-	
 
 
-def offline_user(data):
+def offline_user(conn,data):
 	global offlineUserPre
 	username=data[len(offlineUserPre):data.find(':')]
 	sub_user=data[data.find(':')+1:]
@@ -330,10 +332,10 @@ def offline_user(data):
 		if msg.username == sub_user:
 			res.append(msg)
 	#res.reverse()
-	s.sendto('1'+offlineUserPre+return_json(res),addr)
+	conn.send('1'+offlineUserPre+return_json(res))
 	make_msgs_read(res)
 
-def search_hashtag(data):
+def search_hashtag(conn,data):
 	global searchPre
 	tags=data[len(searchPre):]
 	tags = json.loads(tags)
@@ -347,39 +349,63 @@ def search_hashtag(data):
 					res.append(message)
 					break
 	#res.reverse()
-	s.sendto('1'+searchPre+return_json(res),addr)
+	conn.send('1'+searchPre+return_json(res))
 
-while 1:
-	d = s.recvfrom(1024)
-	data = d[0]
-	addr = d[1]
+def clientthread(conn,addr):
 	
-	if loginPre in data:
-		login_user(data)
-	elif logoutPre in data:
-		logout_user(data)
-	elif subscriptionsPre in data:
-		user_subscriptions(data)
-	elif subscribeDropPre in data:
-		user_drop_subscription(data)
-	elif subscribePre in data:
-		user_add_subscription(data)
-	elif offlinePre in data:
-		offline_all(data)
-	elif offlineUserPre in data:
-		offline_user(data)
-	elif postPre in data:
-		post_message(data)
-	elif searchPre in data:
-		search_hashtag(data)
-	elif userMsgPre in data:
-		get_user_message_count(data)
-	elif adminPre in data:
-		admin_options(data)
-	elif followersPre in data:
-		get_followers(data)
-	elif changePassPre in data:
-		change_pass(data)
+	user=''
+	while True:
+		data = conn.recv(1024)
+		if not data:
+			break
+		elif loginPre in data:
+			user = login_user(conn,data)
+		elif user and logoutPre in data:
+			logout_user(conn,data)
+			user=''
+		elif user and subscriptionsPre in data:
+			user_subscriptions(conn,data)
+		elif user and subscribeDropPre in data:
+			user_drop_subscription(conn,data)
+		elif user and subscribePre in data:
+			user_add_subscription(conn,data)
+		elif user and offlinePre in data:
+			offline_all(conn,data)
+		elif user and offlineUserPre in data:
+			offline_user(conn,data)
+		elif user and postPre in data:
+			post_message(conn,data)
+		elif user and searchPre in data:
+			search_hashtag(conn,data)
+		elif user and userMsgPre in data:
+			get_user_message_count(conn,data)
+		elif user and adminPre in data:
+			admin_options(conn,data)
+		elif user and followersPre in data:
+			get_followers(conn,data)
+		elif user and changePassPre in data:
+			change_pass(conn,data)
+	if user:
+		#print 'user wasn\'t empty'
+		user=get_user(user)
+		if user and user.isLogin:
+			#print 'Connection closed logging out '+user.userName
+			user.isLogin=False
+	conn.close()
+
+	#d = s.recvfrom(1024)
+	#data = conn.recv(1024)
+	
+	#data = d[0]
+	#addr = d[1]
+	
+try:	
+	while 1:
+		conn, addr = s.accept()
+		start_new_thread(clientthread,(conn,addr))
+except KeyboardInterrupt:
+	print
+	sys.exit(0)
 		
 s.close()
 

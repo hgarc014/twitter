@@ -9,10 +9,11 @@ import json
 import getpass
 import hashlib
 from thread import *
-#from check import ip_checksum
+#from clientinfo import *
+#from sharedinfo import *
 
 try:
-	s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 except socket.error, msg:
 	print 'Failed to create socket. Error code: ' + str(msg[0]) + ' , Error message : ' + msg[1]
@@ -63,7 +64,7 @@ strline=color.BOLD+'\n-----------------------------------------------'+color.END
 
 def get_followers():
 	global followersPre
-	s.sendto(followersPre+user,(host,port))
+	s.sendall(followersPre+user)
 	d = s.recvfrom(recvBuffer)
 	reply = d[0]
 	if reply[:len(followersPre)+1] == '1'+followersPre:
@@ -80,7 +81,7 @@ def get_followers():
 
 def update_msg_count():
 	global msgcnt
-	us.sendto(userMsgPre+user,(host,port))
+	us.sendall(userMsgPre+user)
 	d=us.recvfrom(recvBuffer)
 	reply = d[0]
 	if reply[:len(userMsgPre)+1] == '1'+userMsgPre and msgcnt != reply[len(userMsgPre)+1:]:
@@ -92,11 +93,12 @@ def update_msg_count():
 def updateThread(name,empty):
 	global msgcnt
 	try:
-		us = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+		us = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		us.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+		us.connect((host,port))
 		while 1:
 			if len(user) > 0:
-				us.sendto(userMsgPre+user,(host,port))
+				us.sendall(userMsgPre+user)
 				d=us.recvfrom(recvBuffer)
 				reply = d[0]
 				if reply[:len(userMsgPre)+1] == '1'+userMsgPre and msgcnt != reply[len(userMsgPre)+1:]:
@@ -187,7 +189,7 @@ def print_tweet(message):
 
 def get_offline_messages():
 	global offlinePre
-	s.sendto(offlinePre+user,(host,port))
+	s.sendall(offlinePre+user)
 	d=s.recvfrom(recvBuffer)
 	reply = d[0]
 	addr = d[1]
@@ -215,7 +217,7 @@ def choose_offline_by_user(subs):
 		if choice == i:
 			return	
 		#print 'sending:'+offlineUserPre+user+':'+subscriptions[choice-1]
-		s.sendto(offlineUserPre+user+':'+subscriptions[choice-1],(host,port))
+		s.sendall(offlineUserPre+user+':'+subscriptions[choice-1])
 		d = s.recvfrom(recvBuffer)
 		reply = d[0]
 		addr = d[1]
@@ -232,7 +234,7 @@ def choose_offline_by_user(subs):
 
 def get_offline_by_user():
 	global offlineUserPre
-	s.sendto(subscriptionsPre+user,(host,port));
+	s.sendall(subscriptionsPre+user);
 	d = s.recvfrom(recvBuffer)
 	reply = d[0]
 	addr = d[1]
@@ -297,7 +299,7 @@ def drop_subscription(subs):
 		if type(choice) ==int and choice >= 1 and choice <= i:
 			if choice == i:
 				return
-			s.sendto(subscribeDropPre+user+':'+subscriptions[choice-1],(host,port))
+			s.sendall(subscribeDropPre+user+':'+subscriptions[choice-1])
 			d = s.recvfrom(recvBuffer)
 			reply = d[0]
 			addr = d[1]
@@ -314,7 +316,7 @@ def drop_subscription(subs):
 def add_subscription():
 	sub = raw_input("User to subscribe:")
 	myj = '{"username": "' + user + '", "sub" : "'+sub+'"}'
-	s.sendto(subscribePre+myj,(host,port));
+	s.sendall(subscribePre+myj);
 	d = s.recvfrom(recvBuffer)
 	reply = d[0]
 	addr = d[1]
@@ -334,7 +336,7 @@ def edit_subscriptions():
 	if choice == '1':
 		add_subscription()
 	elif choice == '2':
-		s.sendto(subscriptionsPre+user,(host,port));
+		s.sendall(subscriptionsPre+user);
 		d = s.recvfrom(recvBuffer)
 		reply = d[0]
 		addr = d[1]
@@ -371,7 +373,7 @@ def post_message():
 		hashtags=filter(None,hashtags)
 	hashtags=return_json(hashtags)
 	myj='{"username": "'+user+'", "message": "'+message+'", "hashtags": '+hashtags+'}'
-	s.sendto(postPre+myj,(host,port))
+	s.sendall(postPre+myj)
 	d = s.recvfrom(recvBuffer)
 	reply = d[0]
 	if reply [:len(postPre)+1] == '1' + postPre:
@@ -389,7 +391,7 @@ def hashtag_search():
 	hashtags = hashtags.split('#')
 	if '' in hashtags:
 		hashtags=filter(None,hashtags)
-	s.sendto(searchPre+return_json(hashtags),(host,port))
+	s.sendall(searchPre+return_json(hashtags))
 	d = s.recvfrom(2048)
 	reply = d[0]
 	addr = d[1]
@@ -416,7 +418,7 @@ def logout_user():
 	global passwd
 	global logoutPre
 	
-	s.sendto(logoutPre+user, (host,port));
+	s.sendall(logoutPre+user);
 	d= s.recvfrom(recvBuffer)
 	reply = d[0]
 	addr = d[1]
@@ -444,7 +446,7 @@ def admin_options():
 		myj='{"user":"'+user+'","command":"'+command+'","newuser":"'+newuser+'","passwd":"'+newpass+'","isAdmin":"'+newIsAdmin+'"}'
 	else:
 		myj='{"user":"'+user+'","command":"'+command+'"}'
-	s.sendto(adminPre+myj,(host,port))
+	s.sendall(adminPre+myj)
 	d=s.recvfrom(recvBuffer)
 	reply=d[0]
 	if reply[:len(adminPre)+1] == '1'+adminPre:
@@ -469,7 +471,7 @@ def change_password():
 	current_password=md5(current_password)
 	new_password=md5(new_password)
 	myj='{"username":"'+user+'", "currentpass":"'+current_password+'", "newpass" : "'+new_password+'"}'
-	s.sendto(changePassPre+myj,(host,port))
+	s.sendall(changePassPre+myj)
 	d = s.recvfrom(recvBuffer)
 	reply=d[0]
 	if reply[:len(changePassPre)+1] == '1'+changePassPre:
@@ -546,7 +548,7 @@ def login_user():
 	myj='{"username":"'+user+'","passwd":"'+passwd+'"}'
 	
 	try:
-		s.sendto(loginPre+myj, (host, port))
+		s.sendall(loginPre+myj)
 	except socket.error, msg:
 		print 'Error code : ' + str(msg[0]) + ' Message ' + msg[1]
 		sys.exit()
@@ -567,7 +569,14 @@ def login_user():
 		login_user()
 	return
 
-login_user();
+s.connect((host,port))
+
+try:	
+	login_user();
+except KeyboardInterrupt:
+	print
+	sys.exit(0)
+
 
 
 s.close()
