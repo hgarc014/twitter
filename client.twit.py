@@ -73,7 +73,7 @@ def get_followers():
 		print_header('Followers')
 		i=1
 		for name in myj:
-			print str(i)+':'+name
+			print str(i)+' : '+color.BOLD+name+color.END
 			i+=1
 		if i == 1:
 			print 'You have no followers'
@@ -96,17 +96,19 @@ def updateThread(name,empty):
 		us = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		us.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 		us.connect((host,port))
+		us.sendall(userMsgPre+user)
 		while 1:
 			if len(user) > 0:
-				us.sendall(userMsgPre+user)
 				d=us.recvfrom(recvBuffer)
 				reply = d[0]
+				
 				if reply[:len(userMsgPre)+1] == '1'+userMsgPre and msgcnt != reply[len(userMsgPre)+1:]:
 					oldcnt=msgcnt
+					print 'old msgcnt='+msgcnt
 					msgcnt = reply[len(userMsgPre)+1:]
+					print 'received msgcnt='+msgcnt
 					if oldcnt < msgcnt:
 						print_messages()
-				time.sleep(1)
 				#~ else:
 					#~ print 'msgcnt wansnt updated'
 			else:

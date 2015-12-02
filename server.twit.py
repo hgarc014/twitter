@@ -27,6 +27,7 @@ class User(object):
 		self.subscriptions=[]
 		self.followers=[]
 		self.isAdmin=isAdmin
+		self.connection=''
 		self.isLogin=False
 
 	
@@ -175,11 +176,14 @@ def get_user_message_count(conn,data):
 	user = get_user(username)
 	msgcnt=0
 	if user:
+		user.connection=conn
 		for msg in user.messages:
 			if not msg.isRead:
 				msgcnt += 1
+		#~ print 'returned ' + str(msgcnt)
 		conn.send('1'+userMsgPre+str(msgcnt))
 	else:
+		print 'failed'
 		conn.send('0'+userMsgPre)
 
 def get_user(username):
@@ -277,6 +281,9 @@ def post_message(conn,data):
 	for user in userlist:
 		if username in user.subscriptions:
 			user.messages.append(Message(message,hashtags,username))
+			if user.connection:
+				#print 'Calling count for ' + user.userName
+				get_user_message_count(user.connection,userMsgPre+user.userName)
 				
 	conn.send('1'+postPre)
 		
@@ -288,18 +295,29 @@ def post_message(conn,data):
 
 #allow admin to type messagecount in order to display number of received messages since server was activated
 
-def logout_user(conn,data):
-        global logoutPre
-	username=data[len(logoutPre):]
-	wasValid=False
+def logout_username(username):
 	user = get_user(username)
-	if user:
-#	for user in userlist:
-#		if user.userName == username and user.passwd == passwd:
-		print 'logged out user: ' + user.userName;
+	if user and user.isLogin:
 		user.isLogin=False
 		user.messages=[]
-		wasValid=True
+		user.connection=''
+		print 'logged out user: ' + user.userName;
+		return True
+	return False 
+
+def logout(conn,data):
+        global logoutPre
+	username=data[len(logoutPre):]
+	wasValid=logout_username(username)
+	#~ user = get_user(username)
+	#~ if user:
+#~ #	for user in userlist:
+#~ #		if user.userName == username and user.passwd == passwd:
+		#~ print 'logged out user: ' + user.userName;
+		#~ user.isLogin=False
+		#~ user.messages=[]
+		#~ user.connection=''
+		#~ wasValid=True
 		
 	if wasValid:
 		conn.send('1'+logoutPre);
@@ -320,6 +338,7 @@ def offline_all(conn,data):
 	#res.reverse()
 	conn.send('1'+offlinePre+return_json(res))
 	make_msgs_read(res)
+	get_user_message_count(user.connection,userMsgPre+user.userName)
 
 
 def offline_user(conn,data):
@@ -334,6 +353,8 @@ def offline_user(conn,data):
 	#res.reverse()
 	conn.send('1'+offlineUserPre+return_json(res))
 	make_msgs_read(res)
+	get_user_message_count(user.connection,userMsgPre+user.userName)
+	#user.connection=''
 
 def search_hashtag(conn,data):
 	global searchPre
@@ -360,8 +381,10 @@ def clientthread(conn,addr):
 			break
 		elif loginPre in data:
 			user = login_user(conn,data)
+		elif userMsgPre in data:
+			get_user_message_count(conn,data)
 		elif user and logoutPre in data:
-			logout_user(conn,data)
+			logout(conn,data)
 			user=''
 		elif user and subscriptionsPre in data:
 			user_subscriptions(conn,data)
@@ -377,8 +400,6 @@ def clientthread(conn,addr):
 			post_message(conn,data)
 		elif user and searchPre in data:
 			search_hashtag(conn,data)
-		elif user and userMsgPre in data:
-			get_user_message_count(conn,data)
 		elif user and adminPre in data:
 			admin_options(conn,data)
 		elif user and followersPre in data:
@@ -387,10 +408,12 @@ def clientthread(conn,addr):
 			change_pass(conn,data)
 	if user:
 		#print 'user wasn\'t empty'
-		user=get_user(user)
-		if user and user.isLogin:
-			#print 'Connection closed logging out '+user.userName
-			user.isLogin=False
+		logout_username(user)
+		#~ user=get_user(user)
+		#~ if user and user.isLogin:
+			#~ #print 'Connection closed logging out '+user.userName
+			#~ user.isLogin=False
+			#~ user.connection=''
 	conn.close()
 
 	#d = s.recvfrom(1024)
