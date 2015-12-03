@@ -407,21 +407,10 @@ def clientthread(conn,addr):
 		elif user and changePassPre in data:
 			change_pass(conn,data)
 	if user:
-		#print 'user wasn\'t empty'
 		logout_username(user)
-		#~ user=get_user(user)
-		#~ if user and user.isLogin:
-			#~ #print 'Connection closed logging out '+user.userName
-			#~ user.isLogin=False
-			#~ user.connection=''
 	conn.close()
 
-	#d = s.recvfrom(1024)
-	#data = conn.recv(1024)
-	
-	#data = d[0]
-	#addr = d[1]
-	
+
 try:	
 	while 1:
 		conn, addr = s.accept()

@@ -358,12 +358,18 @@ def post_message():
 	message=raw_input("Message (no hashtags):")
 	hashtags=raw_input("HashTags (separated by '#'):")
 	if len(message)+len(hashtags) > 140:
-		print 'Your message + hashtags was ' + str(len(message) + len(hashtags)) + ', which is larger than the allowed 140. \nPlease try again!'
-		wait_enter()
+		print 'Your message + hashtags was ' + str(len(message) + len(hashtags)) + ', which is larger than the allowed 140.'
+		choice = raw_input('Please try again! Or type "quit"')
+		if choice and choice.lower() == 'quit' or choice.lower() == '"quit"':
+			return
+		#wait_enter()
 		return post_message()
 	elif len(message) + len(hashtags) == 0:
-		print 'Your message + hashtags was ' + str(len(message) + len(hashtags)) + ', which is not a valid message. \nPlease try again!'
-		wait_enter()
+		print 'Your message + hashtags was ' + str(len(message) + len(hashtags)) + ', which is not a valid message.'
+		choice = raw_input('Please try again! Or type "quit"')
+		if choice and choice.lower() == 'quit' or choice.lower() == '"quit"':
+			return
+		#wait_enter()
 		return post_message()
 	
 	if '"' in message:
@@ -432,8 +438,7 @@ def logout_user():
 	else:
 		print 'WARNING: error occured'
 		return logout_user()
-	login_user();
-	return
+	return login_user();
 
 def admin_options():
 	global adminPre
@@ -544,7 +549,7 @@ def login_user():
 	
 	if len(user)+len(passwd) == 0:
 		print '\nExiting Program. See you soon!'
-		return
+		sys.exit(0)
 	
 	passwd=md5(passwd)
 	myj='{"username":"'+user+'","passwd":"'+passwd+'"}'
