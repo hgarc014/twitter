@@ -120,7 +120,7 @@ def get_user_message_count(conn,data):
 		#~ print 'returned ' + str(msgcnt)
 		conn.send('1'+FUNCTION.userMsgPre+str(msgcnt))
 	else:
-		print 'failed'
+		print 'failed for ' + username 
 		conn.send('0'+FUNCTION.userMsgPre)
 
 def get_user(username):
@@ -193,7 +193,8 @@ def user_add_subscription(conn,data):
 	user = get_user(username)
 	adduser=get_user(subadd)
 	if adduser:
-		if subadd not in user.subscriptions and subadd != user.userName:
+		 #~ and subadd != user.userName
+		if subadd not in user.subscriptions:
 			user.subscriptions.append(subadd);
 			adduser.followers.append(user.userName)
 			print 'Added "'+user.userName+'" to "'+subadd+'" followers'
@@ -285,7 +286,7 @@ def offline_user(conn,data):
 	user = get_user(username)
 	res=[]
 	for msg in user.messages:
-		if msg.username == sub_user:
+		if msg.userName == sub_user:
 			res.append(msg)
 	#res.reverse()
 	conn.send('1'+FUNCTION.offlineUserPre+return_json(res))
@@ -302,7 +303,7 @@ def search_hashtag(conn,data):
 		for message in allPosts:
 			if len(res) == 10:
 				break
-			for tag in message.hashtags:
+			for tag in message.hashTags:
 				if tag.lower() == searchtag.lower():
 					res.append(message)
 					break

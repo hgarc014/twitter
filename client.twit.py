@@ -9,6 +9,7 @@ import json
 import getpass
 import hashlib
 from thread import *
+from shared import *
 #from clientinfo import *
 #from sharedinfo import *
 
@@ -28,47 +29,39 @@ recvBuffer=2048
 def md5(passwd):
 	return hashlib.md5(passwd.encode('utf-8')).hexdigest()
 
-class color:
-   PURPLE = '\033[95m'
-   CYAN = '\033[96m'
-   DARKCYAN = '\033[36m'
-   BLUE = '\033[94m'
-   GREEN = '\033[92m'
-   YELLOW = '\033[93m'
-   RED = '\033[91m'
-   BOLD = '\033[1m'
-   UNDERLINE = '\033[4m'
-   END = '\033[0m'
 
-pleaseWait='\nPlease do not use this function it is under construction, thanks!\n'
-user=''
-passwd=''
-isAdmin=''
+
+#~ pleaseWait='\nPlease do not use this function it is under construction, thanks!\n'
+#~ user=''
+#~ passwd=''
+#~ isAdmin=''
 msgcnt=''
 
-loginPre='login='
-logoutPre='logout='
-subscribePre='subscribe='
-subscriptionsPre='subscriptions='
-subscribeDropPre='subscribeDrop='
-offlinePre='offline='
-offlineUserPre='offlineUser='
-postPre='post='
-searchPre='search='
-userMsgPre='msgcnt='
-adminPre='admin='
-followersPre='followers='
-changePassPre='changePass='
+myUser=User('','','')
+
+#~ loginPre='login='
+#~ logoutPre='logout='
+#~ subscribePre='subscribe='
+#~ subscriptionsPre='subscriptions='
+#~ subscribeDropPre='subscribeDrop='
+#~ offlinePre='offline='
+#~ offlineUserPre='offlineUser='
+#~ postPre='post='
+#~ searchPre='search='
+#~ userMsgPre='msgcnt='
+#~ adminPre='admin='
+#~ followersPre='followers='
+#~ changePassPre='changePass='
 
 strline=color.BOLD+'\n-----------------------------------------------'+color.END
 
 def get_followers():
-	global followersPre
-	s.sendall(followersPre+user)
+	#~ global followersPre
+	s.sendall(FUNCTION.followersPre+myUser.userName)
 	d = s.recvfrom(recvBuffer)
 	reply = d[0]
-	if reply[:len(followersPre)+1] == '1'+followersPre:
-		data = reply[len(followersPre)+1:]
+	if reply[:len(FUNCTION.followersPre)+1] == '1'+FUNCTION.followersPre:
+		data = reply[len(FUNCTION.followersPre)+1:]
 		myj=json.loads(data)
 		print_header('Followers')
 		i=1
@@ -80,12 +73,12 @@ def get_followers():
 		wait_enter()
 
 def update_msg_count():
-	global msgcnt
-	us.sendall(userMsgPre+user)
+	#~ global msgcnt
+	us.sendall(FUNCTION.userMsgPre+myUser.userName)
 	d=us.recvfrom(recvBuffer)
 	reply = d[0]
-	if reply[:len(userMsgPre)+1] == '1'+userMsgPre and msgcnt != reply[len(userMsgPre)+1:]:
-		msgcnt = reply[len(userMsgPre)+1:]
+	if reply[:len(FUNCTION.userMsgPre)+1] == '1'+FUNCTION.userMsgPre and msgcnt != reply[len(FUNCTION.userMsgPre)+1:]:
+		msgcnt = reply[len(FUNCTION.userMsgPre)+1:]
 		return True
 	else:
 		return False
@@ -96,16 +89,16 @@ def updateThread(name,empty):
 		us = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		us.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 		us.connect((host,port))
-		us.sendall(userMsgPre+user)
+		us.sendall(FUNCTION.userMsgPre+myUser.userName)
 		while 1:
-			if len(user) > 0:
+			if len(myUser.userName) > 0:
 				d=us.recvfrom(recvBuffer)
 				reply = d[0]
 				
-				if reply[:len(userMsgPre)+1] == '1'+userMsgPre and msgcnt != reply[len(userMsgPre)+1:]:
+				if reply[:len(FUNCTION.userMsgPre)+1] == '1'+FUNCTION.userMsgPre and msgcnt != reply[len(FUNCTION.userMsgPre)+1:]:
 					oldcnt=msgcnt
 					#print 'old msgcnt='+msgcnt
-					msgcnt = reply[len(userMsgPre)+1:]
+					msgcnt = reply[len(FUNCTION.userMsgPre)+1:]
 					#print 'received msgcnt='+msgcnt
 					if oldcnt < msgcnt:
 						print_messages()
@@ -179,9 +172,9 @@ def print_tweets(tweets,emptymsg):
 
 def print_tweet(message):
 	timeago=get_current_time(message['postTime'])
-	print '\n@' +message['username'] + '\t'+ timeago
-	if len(message['hashtags']) > 0:
-		print '#' + '#'.join(message['hashtags'])
+	print '\n@' +message['userName'] + '\t'+ timeago
+	if len(message['hashTags']) > 0:
+		print '#' + '#'.join(message['hashTags'])
 	if len(message['message']) > 0:
 		print message['message']
 
@@ -190,13 +183,13 @@ def print_tweet(message):
 #-----------------
 
 def get_offline_messages():
-	global offlinePre
-	s.sendall(offlinePre+user)
+	#~ global offlinePre
+	s.sendall(FUNCTION.offlinePre+myUser.userName)
 	d=s.recvfrom(recvBuffer)
 	reply = d[0]
 	addr = d[1]
-	if reply [:len(offlinePre)+1] == '1' + offlinePre:
-		msgs= reply[len(offlinePre)+1:]
+	if reply [:len(FUNCTION.offlinePre)+1] == '1' + FUNCTION.offlinePre:
+		msgs= reply[len(FUNCTION.offlinePre)+1:]
 		print_header("Messages")
 		myj=json.loads(msgs)
 		print_tweets(myj,'No new messages')
@@ -219,12 +212,12 @@ def choose_offline_by_user(subs):
 		if choice == i:
 			return	
 		#print 'sending:'+offlineUserPre+user+':'+subscriptions[choice-1]
-		s.sendall(offlineUserPre+user+':'+subscriptions[choice-1])
+		s.sendall(FUNCTION.offlineUserPre+myUser.userName+':'+subscriptions[choice-1])
 		d = s.recvfrom(recvBuffer)
 		reply = d[0]
 		addr = d[1]
-		if reply [:len(offlineUserPre)+1] == '1' + offlineUserPre:
-			msgs = reply[len(offlineUserPre)+1:]
+		if reply [:len(FUNCTION.offlineUserPre)+1] == '1' + FUNCTION.offlineUserPre:
+			msgs = reply[len(FUNCTION.offlineUserPre)+1:]
 			print_header("Messages from " + subscriptions[choice-1])
 			myj = json.loads(msgs)
 			print_tweets(myj,'No new messages from '+subscriptions[choice-1])
@@ -235,13 +228,13 @@ def choose_offline_by_user(subs):
 		choose_offline_by_user(subs)
 
 def get_offline_by_user():
-	global offlineUserPre
-	s.sendall(subscriptionsPre+user);
+	#~ global offlineUserPre
+	s.sendall(FUNCTION.subscriptionsPre+myUser.userName);
 	d = s.recvfrom(recvBuffer)
 	reply = d[0]
 	addr = d[1]
-	if reply[:len(subscriptionsPre)+1] == '1'+subscriptionsPre:
-		subs = reply[len(subscriptionsPre)+1:]
+	if reply[:len(FUNCTION.subscriptionsPre)+1] == '1'+FUNCTION.subscriptionsPre:
+		subs = reply[len(FUNCTION.subscriptionsPre)+1:]
 		choose_offline_by_user(subs)
 
 
@@ -250,7 +243,7 @@ def get_offline_by_user():
 #has option to display all or only from a subscription
 #when user logs out these messages should be removed
 def offline_message():
-	global offlinePre
+	#~ global offlinePre
 	print_header('Offline Messages')
 	print '1: see all messages'
 	print '2: see messages from a user'
@@ -301,11 +294,11 @@ def drop_subscription(subs):
 		if type(choice) ==int and choice >= 1 and choice <= i:
 			if choice == i:
 				return
-			s.sendall(subscribeDropPre+user+':'+subscriptions[choice-1])
+			s.sendall(FUNCTION.subscribeDropPre+myUser.userName+':'+subscriptions[choice-1])
 			d = s.recvfrom(recvBuffer)
 			reply = d[0]
 			addr = d[1]
-			if reply[:len(subscribeDropPre)+1] == '1'+subscribeDropPre:
+			if reply[:len(FUNCTION.subscribeDropPre)+1] == '1'+FUNCTION.subscribeDropPre:
 				print 'Successfully unsubscribed to ' + subscriptions[choice-1]
 				wait_enter()
 			else:
@@ -317,12 +310,12 @@ def drop_subscription(subs):
 			
 def add_subscription():
 	sub = raw_input("User to subscribe:")
-	myj = '{"username": "' + user + '", "sub" : "'+sub+'"}'
-	s.sendall(subscribePre+myj);
+	myj = '{"username": "' + myUser.userName + '", "sub" : "'+sub+'"}'
+	s.sendall(FUNCTION.subscribePre+myj);
 	d = s.recvfrom(recvBuffer)
 	reply = d[0]
 	addr = d[1]
-	if reply[:len(subscribePre)+1] == '1'+subscribePre:
+	if reply[:len(FUNCTION.subscribePre)+1] == '1'+FUNCTION.subscribePre:
 		print 'Successfully subscribed to ' + sub
 	else:
 		print 'user "' + sub + '" does not exist'
@@ -338,12 +331,12 @@ def edit_subscriptions():
 	if choice == '1':
 		add_subscription()
 	elif choice == '2':
-		s.sendall(subscriptionsPre+user);
+		s.sendall(FUNCTION.subscriptionsPre+myUser.userName);
 		d = s.recvfrom(recvBuffer)
 		reply = d[0]
 		addr = d[1]
-		if reply[:len(subscriptionsPre)+1] == '1'+subscriptionsPre:
-			drop_subscription(reply[len(subscriptionsPre)+1:])
+		if reply[:len(FUNCTION.subscriptionsPre)+1] == '1'+FUNCTION.subscriptionsPre:
+			drop_subscription(reply[len(FUNCTION.subscriptionsPre)+1:])
 		else:
 			print 'failed:' +reply
 	elif choice == '3':
@@ -354,7 +347,7 @@ def edit_subscriptions():
 
 def post_message():
 	#print pleaseWait
-	global postPre
+	#~ global postPre
 	message=raw_input("Message (no hashtags):")
 	hashtags=raw_input("HashTags (separated by '#'):")
 	if len(message)+len(hashtags) > 140:
@@ -380,11 +373,11 @@ def post_message():
 	if '' in hashtags:
 		hashtags=filter(None,hashtags)
 	hashtags=return_json(hashtags)
-	myj='{"username": "'+user+'", "message": "'+message+'", "hashtags": '+hashtags+'}'
-	s.sendall(postPre+myj)
+	myj='{"username": "'+myUser.userName+'", "message": "'+message+'", "hashtags": '+hashtags+'}'
+	s.sendall(FUNCTION.postPre+myj)
 	d = s.recvfrom(recvBuffer)
 	reply = d[0]
-	if reply [:len(postPre)+1] == '1' + postPre:
+	if reply [:len(FUNCTION.postPre)+1] == '1' + FUNCTION.postPre:
 		print 'message sent successfully'
 		wait_enter()
 	else:
@@ -392,19 +385,19 @@ def post_message():
 	return
 
 def hashtag_search():
-	global searchPre
+	#~ global searchPre
 	#print pleaseWait
 	print_header('Search Hashtag')
 	hashtags=raw_input("Search Hashtag:")
 	hashtags = hashtags.split('#')
 	if '' in hashtags:
 		hashtags=filter(None,hashtags)
-	s.sendall(searchPre+return_json(hashtags))
+	s.sendall(FUNCTION.searchPre+return_json(hashtags))
 	d = s.recvfrom(2048)
 	reply = d[0]
 	addr = d[1]
-	if reply[:len(searchPre)+1]=='1'+searchPre:
-		msgs = reply[len(searchPre)+1:]
+	if reply[:len(FUNCTION.searchPre)+1]=='1'+FUNCTION.searchPre:
+		msgs = reply[len(FUNCTION.searchPre)+1:]
 		myj=json.loads(msgs)
 		if len(myj) == 0:
 			print_tweets(myj,'No results found for #'+'#'.join(hashtags))
@@ -422,18 +415,19 @@ def hashtag_search():
 	return
 
 def logout_user():
-	global user
-	global passwd
-	global logoutPre
-	
-	s.sendall(logoutPre+user);
+	#~ global user
+	#~ global passwd
+	#~ global logoutPre
+	global myUser
+	s.sendall(FUNCTION.logoutPre+myUser.userName);
 	d= s.recvfrom(recvBuffer)
 	reply = d[0]
 	addr = d[1]
-	if reply == '1'+logoutPre:
+	if reply == '1'+FUNCTION.logoutPre:
 		print 'You have been logged out!'
-		user=''
-		passwd=''
+		myUser=User('','','')
+		#~ user=''
+		#~ passwd=''
 		wait_enter()
 	else:
 		print 'WARNING: error occured'
@@ -441,7 +435,7 @@ def logout_user():
 	return login_user();
 
 def admin_options():
-	global adminPre
+	#~ global adminPre
 	print_header("Admin Commands")
 	command=raw_input("command:")
 	myj=''
@@ -450,21 +444,21 @@ def admin_options():
 		newpass=raw_input('new user passwd:')
 		newpass=md5(newpass)
 		newIsAdmin=raw_input('is user admin (T/F):')
-		myj='{"user":"'+user+'","command":"'+command+'","newuser":"'+newuser+'","passwd":"'+newpass+'","isAdmin":"'+newIsAdmin+'"}'
+		myj='{"user":"'+myUser.userName+'","command":"'+command+'","newuser":"'+newuser+'","passwd":"'+newpass+'","isAdmin":"'+newIsAdmin+'"}'
 	else:
-		myj='{"user":"'+user+'","command":"'+command+'"}'
-	s.sendall(adminPre+myj)
+		myj='{"user":"'+myUser.userName+'","command":"'+command+'"}'
+	s.sendall(FUNCTION.adminPre+myj)
 	d=s.recvfrom(recvBuffer)
 	reply=d[0]
-	if reply[:len(adminPre)+1] == '1'+adminPre:
-		res = reply[len(adminPre)+1:]
+	if reply[:len(FUNCTION.adminPre)+1] == '1'+FUNCTION.adminPre:
+		res = reply[len(FUNCTION.adminPre)+1:]
 		print res
 	else:
 		print 'You do not have admin privilege'
 	wait_enter()
 	
 def change_password():
-	global changePassPre
+	#~ global changePassPre
 	global passwd
 	current_password=getpass.getpass('Current Password:')
 	new_password=getpass.getpass('New Password:')
@@ -477,11 +471,11 @@ def change_password():
 		return wait_enter()
 	current_password=md5(current_password)
 	new_password=md5(new_password)
-	myj='{"username":"'+user+'", "currentpass":"'+current_password+'", "newpass" : "'+new_password+'"}'
-	s.sendall(changePassPre+myj)
+	myj='{"username":"'+myUser.userName+'", "currentpass":"'+current_password+'", "newpass" : "'+new_password+'"}'
+	s.sendall(FUNCTION.changePassPre+myj)
 	d = s.recvfrom(recvBuffer)
 	reply=d[0]
-	if reply[:len(changePassPre)+1] == '1'+changePassPre:
+	if reply[:len(FUNCTION.changePassPre)+1] == '1'+FUNCTION.changePassPre:
 		print 'successfully updated password!'
 		passwd=new_password
 	else:
@@ -495,8 +489,8 @@ def menu_disp():
 		msgcnt='0'
 		print 'not initialized'
 	print_header('Menu')
-	print 'Welcome ' + color.GREEN+ user+color.END + ' You have '+msgcnt+' unread messages.\n'
-	if isAdmin:
+	print 'Welcome ' + color.GREEN+ myUser.userName +color.END + ' You have '+msgcnt+' unread messages.\n'
+	if myUser.isAdmin:
 		print '0: Admin'
 	print '1: Messages'
 	print '2: Edit Subscriptions'
@@ -508,7 +502,7 @@ def menu_disp():
 	
 	choice=raw_input("Choice:")
 	
-	if isAdmin and choice == '0':
+	if myUser.isAdmin and choice == '0':
 		admin_options()
 	elif choice == '1':
 		offline_message();
@@ -531,10 +525,11 @@ def menu_disp():
 
 
 def login_user():
-	global user
-	global passwd
-	global loginPre
+	#~ global user
+	#~ global passwd
+	#~ global loginPre
 	global isAdmin
+	global myUser
 
 	clear_screen();
 	
@@ -555,7 +550,7 @@ def login_user():
 	myj='{"username":"'+user+'","passwd":"'+passwd+'"}'
 	
 	try:
-		s.sendall(loginPre+myj)
+		s.sendall(FUNCTION.loginPre+myj)
 	except socket.error, msg:
 		print 'Error code : ' + str(msg[0]) + ' Message ' + msg[1]
 		sys.exit()
@@ -564,11 +559,12 @@ def login_user():
 	reply = d[0]
 	addr = d[1]
 	
-	if reply[:len(loginPre)+1] == '1'+loginPre:
-		data = reply[len(loginPre)+1:]
+	if reply[:len(FUNCTION.loginPre)+1] == '1'+FUNCTION.loginPre:
+		data = reply[len(FUNCTION.loginPre)+1:]
 		myj = json.loads(data)
-		isAdmin=myj["isAdmin"]
-		start_new_thread(updateThread,(user,''))
+		myUser=User(user,passwd,myj['isAdmin'])
+		#~ myUser.isAdmin=myj["isAdmin"]
+		start_new_thread(updateThread,(myUser.userName,''))
 		menu_disp();
 	else:
 		print color.YELLOW+'Login Failed! Please Re-try!'+color.END

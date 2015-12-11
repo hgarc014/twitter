@@ -46,12 +46,47 @@ s.listen(10)
 #~ 
 #~ userlist=[]
 #~ allPosts=[]
-userlist.append(User('user',md5('p'),False));
-userlist.append(User('u',md5('p'),False));
-userlist.append(User('admin',md5('p'),True));
 
-for i in range(1,51):
-	userlist.append(User('u'+str(i),md5('p'),False));
+postfile='posts.json'
+userfile='users.json'
+
+with open(userfile) as userdata:
+	try:
+		tempUsers=json.load(userdata)
+		for user in tempUsers:
+			tuser=User(user['userName'],user['passwd'],user['isAdmin'])
+			tuser.messages=user['messages']
+			tuser.subscriptions=user['subscriptions']
+			tuser.followers=user['followers']
+			#~ userName, passwd,isAdmin,messages,subscriptions,followers
+			userlist.append(tuser)
+	except ValueError:
+		userlist=[]
+	
+
+with open(postfile) as postdata:
+	try:
+		tempPosts=json.load(postdata)
+		for post in tempPosts:
+			tpost=Message(post['message'],post['hashTags'],post['userName'])
+			tpost.postTime=post['postTime']
+			tpost.isRead=True
+			#~ message,hashTags,userName,postTime
+			allPosts.append(tpost)
+	except ValueError:
+		allPosts=[]
+
+
+if len(userlist) == 0:
+	print 'no users were saved'
+	userlist.append(User('user',md5('p'),False));
+	userlist.append(User('u',md5('p'),False));
+	userlist.append(User('admin',md5('p'),True));
+
+	for i in range(1,51):
+		userlist.append(User('u'+str(i),md5('p'),False));
+
+
 
 
 
@@ -61,8 +96,8 @@ try:
 		start_new_thread(clientthread,(conn,addr))
 except KeyboardInterrupt:
 	print
-	saveInfo(allPosts,'posts.json')
-	saveInfo(userlist,'users.json')
+	saveInfo(allPosts,postfile)
+	saveInfo(userlist,userfile)
 	sys.exit(0)
 		
 s.close()
